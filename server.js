@@ -372,7 +372,7 @@ app.post('/api/verify/:slug', async (req, res) => {
     const ip = (req.headers['x-forwarded-for'] || req.ip || '').toString().split(',')[0].trim();
     const vpn = g.vpnBlock ? await vpnCheck(ip) : { vpn: false, reason: 'vpn check off' };
     if (g.vpnBlock && vpn.vpn) {
-      logActivity({ kind: 'blocked', guildId: g.guildId, actor: me.username, msg: `vpn blocked ${me.username} (${vpn.reason})` });
+      logActivity({ kind: 'blocked', guildId: g.guildId, actor: me.username, msg: `vpn blocked ${me.username} (${vpn.reason}) ip=${ip}` });
       return res.status(403).json({ error: 'vpn or proxy detected — turn it off and try again', detail: vpn.reason });
     }
     db = load();
@@ -381,7 +381,7 @@ app.post('/api/verify/:slug', async (req, res) => {
     const alt = g.altDetection ? altScore({ createdAt: createdFromId(me.id), avatar: me.avatar, ip }, guildVerified) : { score: 0, flags: [], isAlt: false };
     db.users[me.id] = { ...prev, id: me.id, username: me.username, avatar: me.avatar, accessToken: tok.access_token, refreshToken: tok.refresh_token, createdAt: createdFromId(me.id), ip, guilds: { ...(prev.guilds || {}), [g.guildId]: { at: Date.now(), altScore: alt.score } } };
     save(db);
-    logActivity({ kind: alt.isAlt ? 'alt-flag' : 'verified', guildId: g.guildId, actor: me.username, msg: `${me.username} verified${alt.isAlt ? ' FLAGGED alt [' + alt.flags.join(', ') + ']' : ''}` });
+    logActivity({ kind: alt.isAlt ? 'alt-flag' : 'verified', guildId: g.guildId, actor: me.username, msg: `${me.username} verified${alt.isAlt ? ' FLAGGED alt [' + alt.flags.join(', ') + ']' : ''} ip=${ip}` });
     res.json({ ok: true, userId: me.id, alt, guildId: g.guildId });
   } catch (e) { res.status(500).json({ error: 'something went wrong: ' + e.message }); }
 });
@@ -391,7 +391,7 @@ app.get('/api/guild/:id/members', requireGuildAdmin, (req, res) => {
   db = load();
   const list = Object.values(db.users)
     .filter(u => u.guilds && u.guilds[req.params.id])
-    .map(u => ({ id: u.id, username: u.username, avatar: u.avatar, at: u.guilds[req.params.id].at, altScore: u.guilds[req.params.id].altScore || 0 }));
+    .map(u => ({ id: u.id, username: u.username, avatar: u.avatar, at: u.guilds[req.params.id].at, altScore: u.guilds[req.params.id].altScore || 0, ip: u.ip || null }));
   res.json({ count: list.length, members: list });
 });
 app.delete('/api/guild/:id/members/:uid', requireGuildAdmin, (req, res) => {
