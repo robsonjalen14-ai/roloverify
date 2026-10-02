@@ -111,8 +111,13 @@ async function vpnCheck(ip) {
     return { vpn, reason: vpn ? `proxy=${j.proxy} hosting=${j.hosting} ${j.isp}` : `clean connection (${j.isp})`, raw: j };
   } catch (e) { return { vpn: false, reason: 'lookup failed, allowed through: ' + e.message }; }
 }
-function altScore(newUser, guildVerified) {
-  // flags: young account (<14d), no avatar, same ip as another verified user
+// discord snowflake -> account creation iso. BigInt math stays BigInt until the
+// final Number() — new Date() throws on a raw BigInt and kills the callback.
+function createdFromId(id) {
+  try { return new Date(Number((BigInt(id) >> 22n) + 1420070400000n)).toISOString(); }
+  catch { return new Date().toISOString(); }
+}
+function altScore(newUser, guildVerified) {  // flags: young account (<14d), no avatar, same ip as another verified user
   const ageDays = (Date.now() - new Date(newUser.createdAt).getTime()) / 86400000;
   let score = 0; const flags = [];
   if (ageDays < 14) { score += 40; flags.push(`young account (${ageDays.toFixed(1)} days old)`); }
@@ -175,7 +180,7 @@ app.get('/auth/discord/callback', async (req, res) => {
     };
     // stash token for 1-click restore (guilds.join) — file store demo, use vault in prod
     db = load();
-    db.users[me.id] = { ...(db.users[me.id] || {}), id: me.id, username: me.username, avatar: me.avatar, accessToken: tok.access_token, refreshToken: tok.refresh_token, createdAt: me.id ? new Date((BigInt(me.id) >> 22n) + 1420070400000n).toISOString() : new Date().toISOString(), ip: req.ip };
+    db.users[me.id] = { ...(db.users[me.id] || {}), id: me.id, username: me.username, avatar: me.avatar, accessToken: tok.access_token, refreshToken: tok.refresh_token, createdAt: createdFromId(me.id), ip: req.ip };
     save(db);
     res.redirect('/dashboard.html');
   } catch (e) { res.status(500).send('Login error: ' + e.message + ' <a href="/">Back home</a>'); }
@@ -339,8 +344,8 @@ app.post('/api/verify/:slug', async (req, res) => {
     db = load();
     const prev = db.users[me.id] || {};
     const guildVerified = Object.fromEntries(Object.entries(db.users).filter(([_, u]) => u.guilds && u.guilds[g.guildId]));
-    const alt = g.altDetection ? altScore({ createdAt: new Date((BigInt(me.id) >> 22n) + 1420070400000n).toISOString(), avatar: me.avatar, ip }, guildVerified) : { score: 0, flags: [], isAlt: false };
-    db.users[me.id] = { ...prev, id: me.id, username: me.username, avatar: me.avatar, accessToken: tok.access_token, refreshToken: tok.refresh_token, createdAt: new Date((BigInt(me.id) >> 22n) + 1420070400000n).toISOString(), ip, guilds: { ...(prev.guilds || {}), [g.guildId]: { at: Date.now(), altScore: alt.score } } };
+    const alt = g.altDetection ? altScore({ createdAt: createdFromId(me.id), avatar: me.avatar, ip }, guildVerified) : { score: 0, flags: [], isAlt: false };
+    db.users[me.id] = { ...prev, id: me.id, username: me.username, avatar: me.avatar, accessToken: tok.access_token, refreshToken: tok.refresh_token, createdAt: createdFromId(me.id), ip, guilds: { ...(prev.guilds || {}), [g.guildId]: { at: Date.now(), altScore: alt.score } } };
     save(db);
     logActivity({ kind: alt.isAlt ? 'alt-flag' : 'verified', guildId: g.guildId, actor: me.username, msg: `${me.username} verified${alt.isAlt ? ' FLAGGED alt [' + alt.flags.join(', ') + ']' : ''}` });
     res.json({ ok: true, userId: me.id, alt, guildId: g.guildId });
