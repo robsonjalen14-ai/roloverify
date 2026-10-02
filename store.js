@@ -22,13 +22,21 @@ function getGuild(db, guildId) {
       altDetection: true,
       requireVerified: true,
       verifySlug: 'verify-' + guildId.slice(-6).toLowerCase(),
-      embed: { title: 'Verify to enter', description: 'Click verify to link your Discord and get restored anytime.', color: '#5865F2', buttonLabel: 'Verify Now' },
+      embed: { title: '🔒 Verify For Access To Server!', description: 'Click Verify Now below to link your Discord — your role lands instantly, and you stay restorable forever.', color: '#2D7DFF', buttonLabel: 'Verify Now' },
       logChannelId: null,
       verifyRoleId: null,
       createdAt: Date.now()
     };
+    return db.guilds[guildId];
   }
-  return db.guilds[guildId];
+  // one-time facelift: untouched old defaults upgrade to the new gate look
+  const g = db.guilds[guildId];
+  if (g.embed && g.embed.title === 'Verify to enter' && String(g.embed.description || '').startsWith('Click verify to link')) {
+    g.embed.title = '🔒 Verify For Access To Server!';
+    g.embed.description = 'Click Verify Now below to link your Discord — your role lands instantly, and you stay restorable forever.';
+  }
+  if (g.embed && g.embed.color === '#5865F2') g.embed.color = '#2D7DFF';
+  return g;
 }
 function pushActivity(db, entry) {
   const row = { ts: Date.now(), ...entry };
