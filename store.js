@@ -37,4 +37,34 @@ function pushActivity(db, entry) {
   save(db);
   return row;
 }
-module.exports = { DB_PATH, load, save, getGuild, pushActivity };
+const { Store } = require('express-session');
+
+// file-backed session store — logins survive restarts and sleep.
+// MemoryStore forgets everything on reboot, which logged people out constantly.
+// file: sessions.json next to the db. single-process only, plenty for this desk.
+const SESS_PATH = path.join(__dirname, 'sessions.json');
+function loadSessions() {
+  try { return JSON.parse(fs.readFileSync(SESS_PATH, 'utf8')); }
+  catch { return {}; }
+}
+function saveSessions(s) {
+  try { fs.writeFileSync(SESS_PATH, JSON.stringify(s)); } catch {}
+}
+class FileStore extends Store {
+  constructor() { super(); this.sessions = loadSessions(); this.reap(); }
+  reap() {
+    const now = Date.now(); let dirty = false;
+    for (const sid of Object.keys(this.sessions)) {
+      try {
+        const exp = this.sessions[sid] && this.sessions[sid].cookie && this.sessions[sid].cookie.expires;
+        if (exp && new Date(exp).getTime() < now) { delete this.sessions[sid]; dirty = true; }
+      } catch {}
+    }
+    if (dirty) saveSessions(this.sessions);
+  }
+  get(sid, cb) { cb(null, this.sessions[sid] || null); }
+  set(sid, sess, cb) { this.sessions[sid] = sess; saveSessions(this.sessions); cb && cb(null); }
+  destroy(sid, cb) { delete this.sessions[sid]; saveSessions(this.sessions); cb && cb(null); }
+  touch(sid, sess, cb) { if (this.sessions[sid]) { this.sessions[sid].cookie = sess.cookie; saveSessions(this.sessions); } cb && cb(null); }
+}
+module.exports = { DB_PATH, load, save, getGuild, pushActivity, FileStore };

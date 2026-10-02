@@ -6,7 +6,7 @@ const express = require('express');
 const session = require('express-session');
 const path = require('path');
 const crypto = require('crypto');
-const { load, save, getGuild, pushActivity } = require('./store');
+const { load, save, getGuild, pushActivity, FileStore } = require('./store');
 
 const {
   DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET, DISCORD_BOT_TOKEN,
@@ -36,9 +36,11 @@ app.use(express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(session({
   secret: sessionSecret,
+  store: new FileStore(),
   resave: false,
+  rolling: true,
   saveUninitialized: false,
-  cookie: { httpOnly: true, sameSite: 'lax', maxAge: 1000 * 60 * 60 * 24 * 7 }
+  cookie: { httpOnly: true, sameSite: 'lax', maxAge: 1000 * 60 * 60 * 24 * 30 }
 }));
 
 let db = load();

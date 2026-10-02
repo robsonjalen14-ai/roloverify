@@ -57,13 +57,14 @@ async function load() {
     $('eColor').value = c.config.embed.color;
     $('eBtn').value = c.config.embed.buttonLabel;
     $('vurl').href = $('vurl').textContent = `/v/${c.config.verifySlug}`;
-    const k = await j(`/api/guild/${GID}/apikey`);
-    $('apikey').textContent = k.apiKey;
     const s = await j(`/api/guild/${GID}/snapshots`);
     $('snaps').innerHTML = s.snapshots.length
       ? s.snapshots.map(x => `<div>${x.id} — ${x.members.length} members — ${new Date(x.at).toLocaleString()} by ${x.by}</div>`).join('')
       : 'No snapshots yet. Take one above.';
-  } catch (e) { banner('Could not load settings: ' + e.message, true); return; }
+  } catch (e) {
+    if (/login required|401/.test(e.message)) { location.href = '/auth/discord'; return; }
+    banner('Could not load settings: ' + e.message, true); return;
+  }
   if (ES) ES.close();
   const box = $('console');
   box.innerHTML = '<div class="muted">Connecting…</div>';
@@ -107,14 +108,6 @@ $('restore').onclick = async () => {
     const r = await j(`/api/guild/${GID}/restore`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ targetGuildId: $('targetGuild').value.trim() || GID }) });
     banner(`Restore done: ${r.restored} back, ${r.failed.length} failed.`);
   } catch (e) { banner('Restore failed: ' + e.message, true); }
-};
-$('rot').onclick = async () => {
-  if (!confirm('Generate a new API key? The old one stops working.')) return;
-  try {
-    const r = await j(`/api/guild/${GID}/rotate-key`, { method: 'POST' });
-    $('apikey').textContent = r.apiKey;
-    banner('New API key generated.');
-  } catch (e) { banner('Key rotation failed: ' + e.message, true); }
 };
 $('logout').onclick = () => fetch('/logout', { method: 'POST' }).then(() => { location.href = '/'; });
 boot();
