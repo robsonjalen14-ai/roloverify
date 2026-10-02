@@ -63,6 +63,12 @@ async function load() {
       : 'No snapshots yet. Take one above.';
   } catch (e) {
     if (/login required|401/.test(e.message)) { location.href = '/auth/discord'; return; }
+    if (/rate limit|429/.test(e.message) && !load.retried) {
+      load.retried = true;
+      banner('Discord is busy — retrying once in 5 seconds…');
+      setTimeout(load, 5000);
+      return;
+    }
     banner('Could not load settings: ' + e.message, true); return;
   }
   if (ES) ES.close();

@@ -69,6 +69,16 @@ label{display:block;margin:12px 0 6px;color:var(--dim)}
 .banner.show{display:block}.banner.error{border-color:var(--red)}
 code{background:#0b0b18;border:1px solid var(--line);padding:2px 8px;border-radius:6px;color:#7db4ff}
 footer{color:var(--dim);text-align:center;padding:30px}
+/* dashboard app shell: sidebar left, sections right */
+.app{display:grid;grid-template-columns:260px 1fr;min-height:100vh;align-items:start}
+.sidebar{border-right:1px solid var(--line);padding:22px 18px;position:sticky;top:0;min-height:100vh;background:#0a0a16}
+.sidebar .brand{margin-bottom:6px}
+.sidebar nav{margin-top:16px}
+.sidebar nav a{display:block;padding:10px 12px;border-radius:10px;color:var(--dim);text-decoration:none;margin:4px 0;border:1px solid transparent}
+.sidebar nav a:hover{background:#2d7dff18;color:var(--txt);border-color:#2d7dff44}
+.side-foot{margin-top:22px;padding-top:14px;border-top:1px solid var(--line)}
+.main{padding:26px;max-width:920px}
+@media(max-width:800px){.app{grid-template-columns:1fr}.sidebar{position:static;min-height:auto}}
 footer::before{content:"";display:block;height:1px;max-width:1080px;margin:0 auto 30px;
   background:linear-gradient(90deg,transparent,var(--blue),var(--blue-ice),transparent)}
 @media(max-width:700px){.row{grid-template-columns:1fr}.hero h1{font-size:36px}}

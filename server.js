@@ -66,10 +66,23 @@ function requireLogin(req, res, next) {
 // admin gate: only servers where you hold Manage Server (0x20) open their dashboard.
 // purpose: stops members opening another server's config by guessing its id.
 // inputs: session token + :id param. outputs: next() or 401/403/500 json.
-async function guildAdminIds(accessToken) {
-  const guilds = await discordFetch('Bearer', accessToken, '/users/@me/guilds');
-  return new Set(guilds.filter(g => { try { return (BigInt(g.permissions) & 0x20n) !== 0n; } catch { return false; } }).map(g => g.id));
+// guild cache: discord throttles hard (429). fetch once per login, reuse 10 min,
+// serve the last good list on 429 instead of dying. inputs: session w/ token.
+const GUILD_TTL = 10 * 60 * 1000;
+async function myGuilds(req) {
+  if (req.session.user.demo) return { guilds: [{ id: DEMO_GUILD_ID, name: 'Demo Server (local test)' }], stale: false };
+  const fresh = req.session.guilds && req.session.guildsAt && (Date.now() - req.session.guildsAt < GUILD_TTL);
+  if (fresh) return { guilds: req.session.guilds, stale: false };
+  try {
+    const guilds = await discordFetch('Bearer', req.session.user.accessToken, '/users/@me/guilds');
+    req.session.guilds = guilds; req.session.guildsAt = Date.now();
+    return { guilds, stale: false };
+  } catch (e) {
+    if (req.session.guilds && req.session.guilds.length) return { guilds: req.session.guilds, stale: true };
+    throw e;
+  }
 }
+function adminOnly(guilds) { return guilds.filter(g => { try { return (BigInt(g.permissions) & 0x20n) !== 0n; } catch { return false; } }); }
 async function requireGuildAdmin(req, res, next) {
   if (!req.session.user) return res.status(401).json({ error: 'login required' });
   try {
@@ -77,10 +90,10 @@ async function requireGuildAdmin(req, res, next) {
       if (req.params.id !== DEMO_GUILD_ID) return res.status(403).json({ error: 'demo mode: this server is not yours' });
       return next();
     }
-    const ids = await guildAdminIds(req.session.user.accessToken);
-    if (!ids.has(req.params.id)) return res.status(403).json({ error: 'admin only: you need Manage Server permission on this server' });
+    const { guilds } = await myGuilds(req);
+    if (!adminOnly(guilds).some(g => g.id === req.params.id)) return res.status(403).json({ error: 'admin only: you need Manage Server permission on this server' });
     next();
-  } catch (e) { res.status(500).json({ error: 'could not check your permissions: ' + e.message }); }
+  } catch (e) { res.status(e.status === 429 ? 429 : 500).json({ error: 'could not check your permissions: ' + e.message }); }
 }
 function guildApiKey(guildId) {
   db = load();
@@ -99,7 +112,14 @@ async function discordFetch(tokenType, accessToken, endpoint, opts = {}) {
     ...opts,
     headers: { Authorization: `${tokenType} ${accessToken}`, 'Content-Type': 'application/json', ...(opts.headers || {}) }
   });
-  if (!r.ok) throw new Error(`discord ${endpoint} -> ${r.status}`);
+  if (!r.ok) {
+    // 429 carries retry_after — surface real seconds instead of a bare number
+    let wait = 0;
+    if (r.status === 429) { try { wait = Math.ceil((JSON.parse(await r.text())).retry_after || 5); } catch { wait = 5; } }
+    const e = new Error(wait ? `discord rate limit — wait ${wait}s and reload` : `discord ${endpoint} -> ${r.status}`);
+    e.status = r.status; e.wait = wait;
+    throw e;
+  }
   return r.json();
 }
 // naive vpn/proxy heuristic: datacenter ASN check via ip-api (no key, rate-limited)
@@ -180,6 +200,11 @@ app.get('/auth/discord/callback', async (req, res) => {
       id: me.id, username: me.username, avatar: me.avatar,
       accessToken: tok.access_token, refreshToken: tok.refresh_token
     };
+    // prime the guild cache at login so the dashboard never hammers discord
+    try {
+      req.session.guilds = await discordFetch('Bearer', tok.access_token, '/users/@me/guilds');
+      req.session.guildsAt = Date.now();
+    } catch { req.session.guilds = []; req.session.guildsAt = 0; }
     // stash token for 1-click restore (guilds.join) — file store demo, use vault in prod
     db = load();
     db.users[me.id] = { ...(db.users[me.id] || {}), id: me.id, username: me.username, avatar: me.avatar, accessToken: tok.access_token, refreshToken: tok.refresh_token, createdAt: createdFromId(me.id), ip: req.ip };
@@ -196,11 +221,9 @@ app.post('/logout', (req, res) => req.session.destroy(() => res.json({ ok: true 
 // user guilds (bot must share these; filter where user has MANAGE_GUILD via permissions bit 0x20)
 app.get('/api/my-guilds', requireLogin, async (req, res) => {
   try {
-    if (req.session.user.demo) return res.json({ guilds: [{ id: DEMO_GUILD_ID, name: 'Demo Server (local test)' }] });
-    const guilds = await discordFetch('Bearer', req.session.user.accessToken, '/users/@me/guilds');
-    // admin servers only — members never see the dashboard
-    res.json({ guilds: guilds.filter(g => { try { return (BigInt(g.permissions) & 0x20n) !== 0n; } catch { return false; } }) });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+    const { guilds, stale } = await myGuilds(req);
+    res.json({ guilds: req.session.user.demo ? guilds : adminOnly(guilds), stale });
+  } catch (e) { res.status(e.status === 429 ? 429 : 500).json({ error: e.message }); }
 });
 
 // ---- dashboard config api ----
