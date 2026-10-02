@@ -126,6 +126,17 @@ function altScore(newUser, guildVerified) {
 app.get('/api/public-config', (req, res) => {
   res.json({ clientId: TEST_MODE ? null : DISCORD_CLIENT_ID, testMode: TEST_MODE, baseUrl: BASE_URL });
 });
+// setup check: the EXACT strings discord must hold registered. compare letter for letter.
+// nothing secret here — these ride inside authorize urls in the open.
+app.get('/api/setup-check', (req, res) => {
+  res.json({
+    testMode: TEST_MODE,
+    clientId: TEST_MODE ? null : DISCORD_CLIENT_ID,
+    baseUrl: BASE_URL,
+    loginRedirect: TEST_MODE ? null : (DISCORD_REDIRECT_URI || 'MISSING — set DISCORD_REDIRECT_URI'),
+    verifyRedirect: TEST_MODE ? null : `${BASE_URL}/verify-callback.html`
+  });
+});
 
 // ---- auth: Login with Discord (OAuth2 code flow) ----
 app.get('/auth/discord', (req, res) => {
