@@ -7,7 +7,7 @@
 <div class="card"><h3>Verified members <span class="pill ok" id="count">0</span></h3>
 <p class="muted">Everyone who verified through your link. Revoking removes them from restore snapshots but never kicks them from Discord.</p>
 <label for="q">Search</label><input id="q" placeholder="Type a name or id…">
-<table style="margin-top:12px"><thead><tr><th>Member</th><th>User ID</th><th>IP</th><th>Verified</th><th>Alt score</th><th></th></tr></thead><tbody id="rows"><tr><td colspan="6" class="muted">Loading…</td></tr></tbody></table>
+<table style="margin-top:12px"><thead><tr><th>Member</th><th>User ID</th><th>IP</th><th>Country</th><th>Registered</th><th>Verified</th><th>Alt score</th><th></th></tr></thead><tbody id="rows"><tr><td colspan="8" class="muted">Loading…</td></tr></tbody></table>
 </div></div>
 <script>
 const $ = (id) => document.getElementById(id);
@@ -23,11 +23,18 @@ async function j(url, opts) {
   if (!r.ok) throw new Error((d && d.error) || t || ('failed (' + r.status + ')'));
   return d;
 }
+function ageOf(iso) {
+  const d = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+  if (!(d >= 0)) return '—';
+  if (d < 30) return d + 'd ago';
+  if (d < 365) return Math.floor(d / 30) + 'mo ago';
+  return Math.floor(d / 365) + 'y ago';
+}
 function paint() {
   const q = $('q').value.trim().toLowerCase();
   const list = ALL.filter(m => !q || m.username.toLowerCase().includes(q) || m.id.includes(q));
   $('count').textContent = ALL.length;
-  $('rows').innerHTML = list.length ? list.map(m => `<tr><td>${m.username}</td><td><code>${m.id}</code></td><td><code>${m.ip || '—'}</code></td><td>${new Date(m.at).toLocaleString()}</td><td>${m.altScore >= 40 ? '<span class="pill bad">flagged</span>' : m.altScore}</td><td><button class="btn ghost" data-id="${m.id}">Revoke</button></td></tr>`).join('') : '<tr><td colspan="6" class="muted">Nobody here yet.</td></tr>';
+  $('rows').innerHTML = list.length ? list.map(m => `<tr><td>${m.username}</td><td><code>${m.id}</code></td><td><code>${m.ip || '—'}</code></td><td>${m.country || '—'}</td><td>${ageOf(m.registered)}</td><td>${new Date(m.at).toLocaleString()}</td><td>${m.altScore >= 40 ? '<span class="pill bad">flagged</span>' : m.altScore}</td><td><button class="btn ghost" data-id="${m.id}">Revoke</button></td></tr>`).join('') : '<tr><td colspan="8" class="muted">Nobody here yet.</td></tr>';
   [...document.querySelectorAll('button[data-id]')].forEach(b => b.onclick = async () => {
     if (!confirm('Revoke this member?')) return;
     try { await j(`/api/guild/${GID}/members/${b.dataset.id}`, { method: 'DELETE' }); load(); }
@@ -45,7 +52,7 @@ async function load() {
   try { await j('/api/me'); } catch { location.href = '/auth/discord'; return; }
   try {
     const g = await j('/api/my-guilds');
-    if (!g.guilds.length) { banner('No admin servers found. You need Manage Server permission somewhere the bot also sits.', true); $('rows').innerHTML = '<tr><td colspan="6" class="muted">No servers.</td></tr>'; return; }
+    if (!g.guilds.length) { banner('No admin servers found. You need Manage Server permission somewhere the bot also sits.', true); $('rows').innerHTML = '<tr><td colspan="8" class="muted">No servers.</td></tr>'; return; }
     $('guild').innerHTML = g.guilds.map(x => `<option value="${x.id}"></option>`).join('');
     [...$('guild').options].forEach((o, i) => { o.textContent = g.guilds[i].name; });
     GID = $('guild').value;

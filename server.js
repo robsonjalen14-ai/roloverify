@@ -131,16 +131,67 @@ async function discordFetch(tokenType, accessToken, endpoint, opts = {}) {
   }
   return r.json();
 }
-// naive vpn/proxy heuristic: datacenter ASN check via ip-api (no key, rate-limited)
-// for prod swap to ipinfo/maxmind; this keeps the free plan working
+// ip intel: country/region/isp/asn come free with the vpn lookup — stored for
+// the log embed + members table. no fraud-score vendor here; vpn/alt verdicts instead.
 async function vpnCheck(ip) {
   if (!ip || ip.startsWith('127.') || ip === '::1' || ip === '::ffff:127.0.0.1') return { vpn: false, reason: 'local connection, check skipped' };
   try {
-    const r = await fetch(`http://ip-api.com/json/${encodeURIComponent(ip)}?fields=proxy,hosting,mobile,isp,org`);
+    const r = await fetch(`http://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,message,country,countryCode,regionName,city,isp,org,as,mobile,proxy,hosting,query`);
     const j = await r.json();
+    if (j.status === 'fail') return { vpn: false, reason: 'lookup failed: ' + (j.message || 'unknown') };
     const vpn = !!(j.proxy || j.hosting);
     return { vpn, reason: vpn ? `proxy=${j.proxy} hosting=${j.hosting} ${j.isp}` : `clean connection (${j.isp})`, raw: j };
   } catch (e) { return { vpn: false, reason: 'lookup failed, allowed through: ' + e.message }; }
+}
+function pickGeo(raw) {
+  if (!raw || raw.status === 'fail') return null;
+  return { country: raw.country || null, countryCode: raw.countryCode || null, region: raw.regionName || null, city: raw.city || null, isp: raw.isp || null, org: raw.org || null, as: raw.as || null, mobile: !!raw.mobile, proxy: !!raw.proxy, hosting: !!raw.hosting };
+}
+function ageText(iso) {
+  const ms = Date.now() - new Date(iso).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return 'unknown';
+  const d = Math.floor(ms / 86400000);
+  if (d < 1) return 'today';
+  if (d < 30) return `${d} day${d === 1 ? '' : 's'} ago`;
+  if (d < 365) { const m = Math.floor(d / 30); return `${m} month${m === 1 ? '' : 's'} ago`; }
+  const y = Math.floor(d / 365); return `${y} year${y === 1 ? '' : 's'} ago`;
+}
+const FLAG_NAMES = [[1, 'Staff'], [2, 'Partner'], [4, 'HypeSquad Events'], [8, 'Bug Hunter I'], [64, 'House Bravery'], [128, 'House Brilliance'], [256, 'House Balance'], [512, 'Early Supporter'], [16384, 'Bug Hunter II'], [131072, 'Early Verified Bot Dev'], [262144, 'Active Developer']];
+function decodeBadges(flags) {
+  try { return FLAG_NAMES.filter(([bit]) => (Number(flags) & bit) !== 0).map(([, n]) => n).join(', ') || 'None'; }
+  catch { return 'None'; }
+}
+function parseUA(ua) {
+  ua = ua || ''; let b = 'unknown', os = '', m;
+  if ((m = ua.match(/Edg\/([\d.]+)/) || ua.match(/Edge\/([\d.]+)/))) b = 'Edge ' + m[1].split('.')[0];
+  else if (/OPR\//.test(ua)) b = 'Opera';
+  else if (/Chrome\//.test(ua)) b = 'Chrome';
+  else if (/Firefox\//.test(ua)) b = 'Firefox';
+  else if (/Safari\//.test(ua) && /Version\//.test(ua)) b = 'Safari';
+  if (/Windows/.test(ua)) os = 'Windows';
+  else if (/Mac OS/.test(ua)) os = 'macOS';
+  else if (/Android/.test(ua)) os = 'Android';
+  else if (/iPhone|iPad/.test(ua)) os = 'iOS';
+  else if (/Linux/.test(ua)) os = 'Linux';
+  return os ? `${b} on ${os}` : b;
+}
+// rich log embed in the discord channel — mirrors the classic verification card.
+// fire-and-forget: a dead channel never breaks verification itself.
+async function postVerifyEmbed(g, u, alt) {
+  if (!g.logChannelId || !DISCORD_BOT_TOKEN || String(DISCORD_BOT_TOKEN).startsWith('test_')) return;
+  const fields = [
+    { name: '👤 User', value: `<@${u.id}>\n@${u.username}`, inline: false },
+    { name: '📬 Email & Contact', value: `Email: N/A (email scope off)\nEmail verified: ${u.emailVerified === null || u.emailVerified === undefined ? 'N/A' : u.emailVerified}\nID: ${u.id}\nLocale: ${u.locale || 'N/A'}\n2FA enabled: ${u.mfa}`, inline: false },
+    { name: '💻 Tech Details', value: `IP Address: ${u.ip || 'N/A'}\nBrowser: ${parseUA(u.ua)}\nRegistered: ${ageText(u.createdAt)}`, inline: false },
+    { name: '🌍 Location & Provider', value: u.geo ? `Country: ${u.geo.country || 'N/A'}${u.geo.countryCode ? ` (${u.geo.countryCode})` : ''}\nRegion: ${u.geo.region || 'N/A'}${u.geo.city ? `, ${u.geo.city}` : ''}\nISP: ${u.geo.isp || 'N/A'}${u.geo.as ? ` (${u.geo.as})` : ''}\nConnection Type: ${u.geo.mobile ? 'Mobile' : 'Business/Broadband'}` : 'lookup skipped (local connection or check off)', inline: false },
+    { name: '🏅 Badges', value: decodeBadges(u.flags), inline: false }
+  ];
+  if (alt && alt.isAlt) fields.push({ name: '⚠️ Alt flags', value: alt.flags.join(', ') });
+  await fetch(`https://discord.com/api/v10/channels/${g.logChannelId}/messages`, {
+    method: 'POST',
+    headers: { Authorization: `Bot ${DISCORD_BOT_TOKEN}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ embeds: [{ title: alt && alt.isAlt ? '⚠️ Member Verified (flagged)' : '☀️ New Member Verification ☀️', color: alt && alt.isAlt ? 0xFF2D4D : 0x22C55E, fields, timestamp: new Date().toISOString() }] })
+  });
 }
 // discord snowflake -> account creation iso. BigInt math stays BigInt until the
 // final Number() — new Date() throws on a raw BigInt and kills the callback.
@@ -370,6 +421,7 @@ app.post('/api/verify/:slug', async (req, res) => {
     if (!tok.access_token) return res.status(400).json({ error: 'verification failed, please try again' });
     const me = await discordFetch('Bearer', tok.access_token, '/users/@me');
     const ip = (req.headers['x-forwarded-for'] || req.ip || '').toString().split(',')[0].trim();
+    const ua = String(req.headers['user-agent'] || '').slice(0, 200);
     const vpn = g.vpnBlock ? await vpnCheck(ip) : { vpn: false, reason: 'vpn check off' };
     if (g.vpnBlock && vpn.vpn) {
       logActivity({ kind: 'blocked', guildId: g.guildId, actor: me.username, msg: `vpn blocked ${me.username} (${vpn.reason}) ip=${ip}` });
@@ -379,9 +431,10 @@ app.post('/api/verify/:slug', async (req, res) => {
     const prev = db.users[me.id] || {};
     const guildVerified = Object.fromEntries(Object.entries(db.users).filter(([_, u]) => u.guilds && u.guilds[g.guildId]));
     const alt = g.altDetection ? altScore({ createdAt: createdFromId(me.id), avatar: me.avatar, ip }, guildVerified) : { score: 0, flags: [], isAlt: false };
-    db.users[me.id] = { ...prev, id: me.id, username: me.username, avatar: me.avatar, accessToken: tok.access_token, refreshToken: tok.refresh_token, createdAt: createdFromId(me.id), ip, guilds: { ...(prev.guilds || {}), [g.guildId]: { at: Date.now(), altScore: alt.score } } };
+    db.users[me.id] = { ...prev, id: me.id, username: me.username, avatar: me.avatar, accessToken: tok.access_token, refreshToken: tok.refresh_token, createdAt: createdFromId(me.id), ip, ua, locale: me.locale || null, mfa: !!me.mfa_enabled, emailVerified: me.verified === true ? true : me.verified === false ? false : null, flags: typeof me.flags === 'number' ? me.flags : 0, geo: pickGeo(vpn.raw), guilds: { ...(prev.guilds || {}), [g.guildId]: { at: Date.now(), altScore: alt.score } } };
     save(db);
     logActivity({ kind: alt.isAlt ? 'alt-flag' : 'verified', guildId: g.guildId, actor: me.username, msg: `${me.username} verified${alt.isAlt ? ' FLAGGED alt [' + alt.flags.join(', ') + ']' : ''} ip=${ip}` });
+    postVerifyEmbed(g, db.users[me.id], alt).catch(() => {});
     res.json({ ok: true, userId: me.id, alt, guildId: g.guildId });
   } catch (e) { res.status(500).json({ error: 'something went wrong: ' + e.message }); }
 });
@@ -391,7 +444,7 @@ app.get('/api/guild/:id/members', requireGuildAdmin, (req, res) => {
   db = load();
   const list = Object.values(db.users)
     .filter(u => u.guilds && u.guilds[req.params.id])
-    .map(u => ({ id: u.id, username: u.username, avatar: u.avatar, at: u.guilds[req.params.id].at, altScore: u.guilds[req.params.id].altScore || 0, ip: u.ip || null }));
+    .map(u => ({ id: u.id, username: u.username, avatar: u.avatar, at: u.guilds[req.params.id].at, altScore: u.guilds[req.params.id].altScore || 0, ip: u.ip || null, country: (u.geo && (u.geo.countryCode || u.geo.country)) || null, registered: u.createdAt || null, mfa: !!u.mfa }));
   res.json({ count: list.length, members: list });
 });
 app.delete('/api/guild/:id/members/:uid', requireGuildAdmin, (req, res) => {
@@ -416,4 +469,4 @@ app.get('/pricing.html', (req, res) => res.sendFile(path.join(__dirname, 'public
 // local test probe — no auth, proves localhost is up
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'roloverify-local', base: BASE_URL, testMode: TEST_MODE, commit: process.env.RENDER_GIT_COMMIT || 'local', ts: Date.now() }));
 app.listen(PORT, () => console.log(`roloverify local on ${BASE_URL}${TEST_MODE ? ' (test mode: demo login on)' : ''}`));
-module.exports = { app, logActivity };
+module.exports = { app, logActivity, ageText, decodeBadges, parseUA, pickGeo };
