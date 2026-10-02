@@ -13,11 +13,17 @@ const {
   DISCORD_REDIRECT_URI, SESSION_SECRET, PORT = 3000, BASE_URL = `http://localhost:${PORT}`
 } = process.env;
 
-// hosting guard: no secret, no boot. a shared fallback salt lets anyone forge
-// an admin session cookie, so production refuses to start loud instead of open.
-if (process.env.NODE_ENV === 'production' && !SESSION_SECRET) {
-  console.error('FATAL: SESSION_SECRET is missing. Set any long random string and redeploy.');
-  process.exit(1);
+// session salt: persistent value wins. missing on hosting? mint a random one per
+// boot — unguessable, so no forgery. only cost: logins expire on restart.
+// set a real SESSION_SECRET for sessions that survive redeploys.
+let sessionSecret = SESSION_SECRET;
+if (!sessionSecret) {
+  if (process.env.NODE_ENV === 'production') {
+    sessionSecret = crypto.randomBytes(32).toString('hex');
+    console.warn('WARN: SESSION_SECRET missing — temporary salt minted. Set a persistent value for stable logins.');
+  } else {
+    sessionSecret = 'roloverify-dev';
+  }
 }
 
 // test mode = no real discord app configured. localhost demo login + demo server work end to end.
@@ -29,7 +35,7 @@ app.set('trust proxy', 1); // hosting runs behind a proxy — real client ip for
 app.use(express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(session({
-  secret: SESSION_SECRET || 'roloverify-dev',
+  secret: sessionSecret,
   resave: false,
   saveUninitialized: false,
   cookie: { httpOnly: true, sameSite: 'lax', maxAge: 1000 * 60 * 60 * 24 * 7 }
