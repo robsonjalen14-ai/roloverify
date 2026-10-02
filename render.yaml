@@ -1,0 +1,19 @@
+# Rolo Verify — one-click hosting on Render (render.com, free tier works)
+services:
+  - type: web
+    name: roloverify
+    runtime: docker
+    healthCheckPath: /api/health
+    envVars:
+      - key: BASE_URL
+        sync: false # set after first deploy, e.g. https://roloverify.onrender.com
+      - key: DISCORD_CLIENT_ID
+        sync: false
+      - key: DISCORD_CLIENT_SECRET
+        sync: false
+      - key: DISCORD_BOT_TOKEN
+        sync: false
+      - key: DISCORD_REDIRECT_URI
+        sync: false # https://YOUR-URL.onrender.com/auth/discord/callback
+      - key: SESSION_SECRET
+        generateValue: true

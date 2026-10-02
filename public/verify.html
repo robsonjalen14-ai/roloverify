@@ -1,0 +1,52 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Verify — Rolo Verify</title><link rel="stylesheet" href="/style.css"></head><body>
+<div class="wrap" style="max-width:560px;text-align:center;padding-top:60px">
+<div class="nav" style="position:static"><div class="brand">🥔 Rolo <span>Verify</span></div><div><a class="btn ghost" href="/">Home</a></div></div>
+<div class="card" style="margin-top:20px"><h2 id="t">Loading…</h2><p class="muted" id="d"></p>
+<button class="btn" id="go">Verify with Discord</button>
+<button class="btn ghost" id="demoGo" style="display:none">Try demo verify (local test)</button>
+<p class="muted" id="msg"></p></div></div>
+<script>
+(async () => {
+  const slug = location.pathname.split('/').pop();
+  const t = document.getElementById('t'), d = document.getElementById('d'),
+        go = document.getElementById('go'), demoGo = document.getElementById('demoGo'),
+        msg = document.getElementById('msg');
+  let cfg, pub;
+  try {
+    [cfg, pub] = await Promise.all([
+      fetch('/api/verify/' + encodeURIComponent(slug)).then(r => { if (!r.ok) throw new Error('bad link'); return r.json(); }),
+      fetch('/api/public-config').then(r => r.json())
+    ]);
+  } catch {
+    t.textContent = 'Unknown verify link';
+    d.textContent = 'This link is expired or mistyped. Ask the server staff for a fresh one.';
+    go.style.display = 'none';
+    return;
+  }
+  t.textContent = cfg.embed.title;
+  d.textContent = cfg.embed.description;
+  if (pub.testMode || !pub.clientId) {
+    go.style.display = 'none';
+    demoGo.style.display = 'inline-block';
+    msg.textContent = 'Local test mode: no real Discord app is configured, so one click verifies a demo member.';
+    demoGo.onclick = async () => {
+      msg.textContent = 'Verifying…';
+      const r = await fetch('/api/verify/' + encodeURIComponent(slug), {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ demo: true, username: 'LocalTester' })
+      });
+      const out = await r.json();
+      msg.textContent = r.ok ? 'Verified. You can go back to Discord.' : ('Failed: ' + (out.error || 'try again'));
+    };
+  } else {
+    go.onclick = () => {
+      const p = new URLSearchParams({
+        client_id: pub.clientId,
+        redirect_uri: location.origin + '/verify-callback.html?slug=' + slug,
+        response_type: 'code', scope: 'identify guilds.join'
+      });
+      location.href = 'https://discord.com/oauth2/authorize?' + p.toString();
+    };
+  }
+})();
+</script></body></html>

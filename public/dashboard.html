@@ -1,0 +1,34 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dashboard — Rolo Verify</title><link rel="stylesheet" href="/style.css"></head><body>
+<div class="nav"><div class="brand">🥔 Rolo <span>Verify</span> — Dashboard</div><div><span id="me" class="muted"></span> <button class="btn ghost" id="logout">Logout</button></div></div>
+<div class="wrap">
+<div class="banner" id="banner"></div>
+<label for="guild">Server</label><select id="guild"></select>
+<div class="row"><div>
+<div class="card"><h3>Protection</h3>
+<p class="muted">Blocked joins and flagged alts show up in the activity console below.</p>
+<div class="toggle"><span>VPN / Proxy Blocking</span><input type="checkbox" id="vpnBlock"></div>
+<div class="toggle"><span>Alt Account Detection</span><input type="checkbox" id="altDetection"></div>
+<div class="toggle"><span>Require Verified to stay</span><input type="checkbox" id="requireVerified"></div>
+<label for="verifySlug">Custom verify link (letters, numbers, dashes)</label><input id="verifySlug" maxlength="40">
+<label for="logChannelId">Log channel ID (Discord)</label><input id="logChannelId" placeholder="e.g. 123456789">
+<label for="verifyRoleId">Verified role ID (Discord)</label><input id="verifyRoleId" placeholder="e.g. 123456789">
+<button class="btn" id="save" style="margin-top:12px">Save settings</button> <span id="saveMsg" class="muted"></span>
+<p class="muted">Your verify page: <a id="vurl" target="_blank" rel="noopener"></a></p>
+</div>
+<div class="card"><h3>Verify page design</h3>
+<p class="muted">This is what members see when they open your verify link.</p>
+<label for="eTitle">Title</label><input id="eTitle" maxlength="120"><label for="eDesc">Description</label><textarea id="eDesc" rows="3" maxlength="1000"></textarea>
+<div class="row"><div><label for="eColor">Color</label><input id="eColor" placeholder="#5865F2"></div><div><label for="eBtn">Button text</label><input id="eBtn" maxlength="40"></div></div>
+</div>
+<div class="card"><h3>Snapshots + Restore</h3>
+<p class="muted">Snapshots remember every verified member. If your server is ever deleted, restore them all to a new one in one click.</p>
+<button class="btn" id="snap">Take snapshot now</button> <button class="btn ghost" id="restore">Restore members</button>
+<label for="targetGuild">Restore into server ID (leave empty = this server)</label><input id="targetGuild" placeholder="New server id">
+<div id="snaps" class="muted" style="margin-top:10px">Loading snapshots…</div></div>
+<div class="card"><h3>Developer API</h3><p class="muted">Send this key as the <code>x-api-key</code> header to <code>GET /api/v1/:serverId/members</code>.</p>
+<code id="apikey">Loading…</code><br><br><button class="btn ghost" id="rot">Generate new key</button></div>
+</div><div>
+<div class="card"><h3>Live Activity</h3><p class="muted">Verifications, blocks, snapshots and restores appear here in real time.</p><div id="console"><div class="muted">Connecting…</div></div></div>
+</div></div></div>
+<script src="/dashboard.js"></script></body></html>

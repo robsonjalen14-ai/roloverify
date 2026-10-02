@@ -1,0 +1,21 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Finishing verification… — Rolo Verify</title><link rel="stylesheet" href="/style.css"></head><body>
+<div class="wrap" style="max-width:560px;text-align:center;padding-top:60px">
+<div class="card"><h3 id="m">Finishing verification…</h3><p><a class="btn ghost" href="/">Back home</a></p></div></div>
+<script>
+(async () => {
+  const box = document.getElementById('m');
+  const q = new URLSearchParams(location.search);
+  if (q.get('error')) { box.textContent = 'Verification was cancelled. You can close this page and try again.'; return; }
+  const slug = q.get('slug'), code = q.get('code');
+  if (!slug || !code) { box.textContent = 'This page is missing its login details. Please open your verify link again.'; return; }
+  try {
+    const r = await fetch('/api/verify/' + encodeURIComponent(slug), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code })
+    });
+    const out = await r.json();
+    box.textContent = r.ok
+      ? ('Verified. You can go back to Discord.' + (out.alt && out.alt.isAlt ? ' Your account was flagged for staff review.' : ''))
+      : ('Verification failed: ' + (out.error || 'please try again'));
+  } catch { box.textContent = 'The server did not answer. Check it is running and try again.'; }
+})();
+</script></body></html>
