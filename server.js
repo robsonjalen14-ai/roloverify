@@ -29,6 +29,10 @@ if (!sessionSecret) {
 // test mode = no real discord app configured. localhost demo login + demo server work end to end.
 const TEST_MODE = !DISCORD_CLIENT_ID || DISCORD_CLIENT_ID.startsWith('test_');
 const DEMO_GUILD_ID = '111111111111111111';
+// owner override: this discord user id sees EVERY server on their account,
+// admin or not. set OWNER_ID in env. everyone else keeps the admin gate.
+const OWNER_ID = process.env.OWNER_ID || '';
+function isOwner(req) { return !!OWNER_ID && !!req.session.user && req.session.user.id === OWNER_ID; }
 
 const app = express();
 app.set('trust proxy', 1); // hosting runs behind a proxy — real client ip for vpn checks
@@ -88,6 +92,11 @@ async function requireGuildAdmin(req, res, next) {
   try {
     if (req.session.user.demo) {
       if (req.params.id !== DEMO_GUILD_ID) return res.status(403).json({ error: 'demo mode: this server is not yours' });
+      return next();
+    }
+    if (isOwner(req)) {
+      const { guilds } = await myGuilds(req);
+      if (!guilds.some(g => g.id === req.params.id)) return res.status(404).json({ error: 'server not found on your account' });
       return next();
     }
     const { guilds } = await myGuilds(req);
@@ -222,7 +231,7 @@ app.post('/logout', (req, res) => req.session.destroy(() => res.json({ ok: true 
 app.get('/api/my-guilds', requireLogin, async (req, res) => {
   try {
     const { guilds, stale } = await myGuilds(req);
-    res.json({ guilds: req.session.user.demo ? guilds : adminOnly(guilds), stale });
+    res.json({ guilds: (req.session.user.demo || isOwner(req)) ? guilds : adminOnly(guilds), stale });
   } catch (e) { res.status(e.status === 429 ? 429 : 500).json({ error: e.message }); }
 });
 
