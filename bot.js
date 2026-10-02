@@ -49,7 +49,6 @@ client.on('interactionCreate', async (ix) => {
       .setTitle(g2.embed.title)
       .setDescription(g2.embed.description + `\n\n[**Verify here**](${url})`)
       .setColor(parseInt(String(g2.embed.color || '').replace('#', ''), 16) || 0x2D7DFF)
-      .addFields({ name: 'How it goes', value: '1. Hit **Verify Now**\n2. Sign in with Discord\n3. Done: role is yours' })
       .setFooter({ text: 'Rolo Verify' })
       .setTimestamp();
     if (icon) { emb.setAuthor({ name: `${ix.guild.name} • Verification`, iconURL: icon }); emb.setThumbnail(icon); }
