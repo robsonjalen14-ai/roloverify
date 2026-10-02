@@ -150,11 +150,9 @@ app.get('/auth/discord', (req, res) => {
     save(db);
     return res.redirect('/dashboard.html');
   }
-  const p = new URLSearchParams({
-    client_id: DISCORD_CLIENT_ID, redirect_uri: DISCORD_REDIRECT_URI,
-    response_type: 'code', scope: 'identify guilds guilds.join'
-  });
-  res.redirect('https://discord.com/oauth2/authorize?' + p.toString());
+  // authorize url built byte-exact: %20 scopes, matching the registered link
+  const q = `client_id=${encodeURIComponent(DISCORD_CLIENT_ID)}&redirect_uri=${encodeURIComponent(DISCORD_REDIRECT_URI)}&response_type=code&scope=${encodeURIComponent('identify guilds guilds.join')}`;
+  res.redirect('https://discord.com/oauth2/authorize?' + q);
 });
 app.get('/auth/discord/callback', async (req, res) => {
   try {
