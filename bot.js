@@ -1,7 +1,7 @@
 // bot.js — discord.js 14.14.1 gateway: verify embed deploy + join-gate + logging
 // *GatewayIntentBits.GuildMembers privileged — flip it on in dev portal or guildMemberAdd never fires*
 require('dotenv').config();
-const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, REST, Routes, SlashCommandBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, REST, Routes, SlashCommandBuilder, ActivityType } = require('discord.js');
 const { load, save, getGuild, pushActivity } = require('./store');
 
 const TOKEN = process.env.DISCORD_BOT_TOKEN;
@@ -17,6 +17,8 @@ function dbLog(entry) {
 
 client.once('ready', async () => {
   console.log('> rolo-verify v1.0\n> connecting to discord...\n> logged in as ' + client.user.tag + '\n> watching for new members...\n> verification enabled.\n> ready.');
+  client.user.setPresence({ activities: [{ name: 'Rolo Verify', type: ActivityType.Playing }], status: 'dnd' });
+  console.log('> status: dnd, playing Rolo Verify');
   const cmds = [
     new SlashCommandBuilder().setName('verify-setup').setDescription('post the verify embed here')
       .addChannelOption(o => o.setName('log').setDescription('log channel').setRequired(false))
