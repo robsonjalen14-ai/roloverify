@@ -1,4 +1,6 @@
 # Rolo Verify — one-click hosting on Render (render.com, free tier works)
+# single Web Service runs BOTH the site and the discord bot (see Dockerfile CMD).
+# create it via: Render → New → Blueprint → pick this repo. nothing else to create.
 services:
   - type: web
     name: roloverify
