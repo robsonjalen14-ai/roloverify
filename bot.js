@@ -39,23 +39,40 @@ client.on('interactionCreate', async (ix) => {
   const db = load();
   const g = getGuild(db, ix.guildId); save(db);
   if (ix.commandName === 'verify-setup') {
-    const log = ix.options.getChannel('log'); const role = ix.options.getRole('role');
-    const db2 = load(); const g2 = getGuild(db2, ix.guildId);
-    g2.logChannelId = log.id; g2.verifyRoleId = role.id;
-    save(db2);
-    const url = `${BASE_URL}/v/${g2.verifySlug}`;
-    const icon = ix.guild.iconURL({ size: 128 });
-    const emb = new EmbedBuilder()
-      .setTitle(g2.embed.title)
-      .setDescription(g2.embed.description + `\n\n[**Verify here**](${url})`)
-      .setColor(parseInt(String(g2.embed.color || '').replace('#', ''), 16) || 0x2D7DFF)
-      .setFooter({ text: 'Rolo Verify' })
-      .setTimestamp();
-    if (icon) { emb.setAuthor({ name: `${ix.guild.name} • Verification`, iconURL: icon }); emb.setThumbnail(icon); }
-    const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setLabel(g2.embed.buttonLabel || 'Verify Now').setStyle(ButtonStyle.Link).setURL(url));
-    await ix.channel.send({ embeds: [emb], components: [row] });
-    await ix.reply({ content: `verify live → ${url}\nrole <@&${role.id}> on verify, cards in <#${log.id}>`, ephemeral: true });
-    dbLog({ kind: 'config', guildId: ix.guildId, actor: ix.user.username, msg: `verify embed deployed by ${ix.user.username}` });
+    await ix.deferReply({ ephemeral: true });
+    try {
+      const log = ix.options.getChannel('log'); const role = ix.options.getRole('role');
+      const db2 = load(); const g2 = getGuild(db2, ix.guildId);
+      g2.logChannelId = log.id; g2.verifyRoleId = role.id;
+      save(db2);
+      const url = `${BASE_URL}/v/${g2.verifySlug}`;
+      const icon = ix.guild.iconURL({ size: 128 });
+      const emb = new EmbedBuilder()
+        .setTitle(g2.embed.title)
+        .setDescription(g2.embed.description + `\n\n[**Verify here**](${url})`)
+        .setColor(parseInt(String(g2.embed.color || '').replace('#', ''), 16) || 0x2D7DFF)
+        .setFooter({ text: 'Rolo Verify' })
+        .setTimestamp();
+      if (icon) { emb.setAuthor({ name: `${ix.guild.name} • Verification`, iconURL: icon }); emb.setThumbnail(icon); }
+      const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setLabel(g2.embed.buttonLabel || 'Verify Now').setStyle(ButtonStyle.Link).setURL(url));
+      // setup-time diagnosis: say what's broken now, not after a failed verify
+      const warns = [];
+      try {
+        const me = await ix.guild.members.fetch(client.user.id);
+        if (!me.permissions.has('ManageRoles')) warns.push('I lack Manage Roles — roles will not grant until it is ticked.');
+        if (role.position >= me.roles.highest.position) warns.push(`my top role sits below @${role.name} — drag the bot role above it.`);
+      } catch { warns.push('could not inspect roles — re-run setup if grants fail.'); }
+      try {
+        await ix.channel.send({ embeds: [emb], components: [row] });
+      } catch {
+        await ix.editReply(`Saved, but I cannot post in this channel — run setup where I can send messages.${warns.length ? '\nAlso: ' + warns.join(' ') : ''}`);
+        return;
+      }
+      await ix.editReply(`verify live → ${url}\nrole <@&${role.id}> on verify, cards in <#${log.id}>${warns.length ? '\nWarnings: ' + warns.join(' ') : ''}`);
+      dbLog({ kind: 'config', guildId: ix.guildId, actor: ix.user.username, msg: `verify embed deployed by ${ix.user.username}` });
+    } catch (e) {
+      try { await ix.editReply('Setup hit an error: ' + e.message); } catch {}
+    }
   }
   if (ix.commandName === 'snapshot') {
     const db3 = load();
