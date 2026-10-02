@@ -40,12 +40,9 @@
     };
   } else {
     go.onclick = () => {
-      const p = new URLSearchParams({
-        client_id: pub.clientId,
-        redirect_uri: location.origin + '/verify-callback.html?slug=' + slug,
-        response_type: 'code', scope: 'identify guilds.join'
-      });
-      location.href = 'https://discord.com/oauth2/authorize?' + p.toString();
+      // bare redirect (exactly registered) + slug rides in state, never in the url
+      const q = `client_id=${encodeURIComponent(pub.clientId)}&redirect_uri=${encodeURIComponent(location.origin + '/verify-callback.html')}&response_type=code&scope=${encodeURIComponent('identify guilds.join')}&state=${encodeURIComponent(slug)}`;
+      location.href = 'https://discord.com/oauth2/authorize?' + q;
     };
   }
 })();

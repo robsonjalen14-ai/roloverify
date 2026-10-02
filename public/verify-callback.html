@@ -6,7 +6,7 @@
   const box = document.getElementById('m');
   const q = new URLSearchParams(location.search);
   if (q.get('error')) { box.textContent = 'Verification was cancelled. You can close this page and try again.'; return; }
-  const slug = q.get('slug'), code = q.get('code');
+  const slug = q.get('state') || q.get('slug'), code = q.get('code');
   if (!slug || !code) { box.textContent = 'This page is missing its login details. Please open your verify link again.'; return; }
   try {
     const r = await fetch('/api/verify/' + encodeURIComponent(slug), {
