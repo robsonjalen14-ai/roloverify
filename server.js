@@ -13,6 +13,13 @@ const {
   DISCORD_REDIRECT_URI, SESSION_SECRET, PORT = 3000, BASE_URL = `http://localhost:${PORT}`
 } = process.env;
 
+// hosting guard: no secret, no boot. a shared fallback salt lets anyone forge
+// an admin session cookie, so production refuses to start loud instead of open.
+if (process.env.NODE_ENV === 'production' && !SESSION_SECRET) {
+  console.error('FATAL: SESSION_SECRET is missing. Set any long random string and redeploy.');
+  process.exit(1);
+}
+
 // test mode = no real discord app configured. localhost demo login + demo server work end to end.
 const TEST_MODE = !DISCORD_CLIENT_ID || DISCORD_CLIENT_ID.startsWith('test_');
 const DEMO_GUILD_ID = '111111111111111111';
