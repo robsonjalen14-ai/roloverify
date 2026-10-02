@@ -101,6 +101,13 @@ $('save').onclick = async () => {
     load();
   } catch (e) { $('saveMsg').textContent = 'Save failed: ' + e.message; }
 };
+$('rolecheck').onclick = async () => {
+  banner('Checking bot permissions…');
+  try {
+    const r = await j(`/api/guild/${GID}/rolecheck`);
+    banner(r.ok ? 'Bot setup green: role grant plus log channel ready.' : 'Bot setup needs work: ' + r.reasons.join(' '), !r.ok);
+  } catch (e) { banner('Check failed: ' + e.message, true); }
+};
 $('snap').onclick = async () => {
   try {
     const r = await j(`/api/guild/${GID}/snapshot`, { method: 'POST' });

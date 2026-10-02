@@ -192,7 +192,7 @@ async function postVerifyEmbed(g, u, alt) {
   await fetch(`https://discord.com/api/v10/channels/${g.logChannelId}/messages`, {
     method: 'POST',
     headers: { Authorization: `Bot ${DISCORD_BOT_TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ...(PING_USER_ID ? { content: `<@${PING_USER_ID}> fresh verification 👀` } : {}), embeds: [{ title: alt && alt.isAlt ? '⚠️ Member Verified (flagged)' : '☀️ New Member Verification ☀️', color: alt && alt.isAlt ? 0xFF2D4D : 0x22C55E, fields, timestamp: new Date().toISOString() }] })
+    body: JSON.stringify({ ...(PING_USER_ID ? { content: `<@${PING_USER_ID}> fresh verification 👀` } : {}), embeds: [{ title: alt && alt.isAlt ? '⚠️ Member Verified (flagged)' : '☀️ New Member Verification ☀️', color: alt && alt.isAlt ? 0xFF2D4D : 0x2D7DFF, author: { name: 'Rolo Verify' }, thumbnail: u.avatar ? { url: `https://cdn.discord.com/avatars/${u.id}/${u.avatar}.png` } : undefined, fields, footer: { text: 'Rolo Verify • automated check' }, timestamp: new Date().toISOString() }] })
   });
 }
 // discord snowflake -> account creation iso. BigInt math stays BigInt until the
@@ -442,7 +442,10 @@ app.post('/api/verify/:slug', async (req, res) => {
         const rr = await fetch(`https://discord.com/api/v10/guilds/${g.guildId}/members/${me.id}/roles/${g.verifyRoleId}`, {
           method: 'PUT', headers: { Authorization: `Bot ${DISCORD_BOT_TOKEN}` }
         });
-        roleMsg = rr.ok ? ' + role given' : ' (role failed: move the bot role above it)';
+        roleMsg = rr.ok ? ' + role given'
+          : rr.status === 403 ? ' (role failed 403: give the bot Manage Roles + drag its role above the verified one)'
+          : rr.status === 404 ? ' (role failed 404: role or member gone — re-run /verify-setup)'
+          : ` (role failed: discord said ${rr.status})`;
       } catch (e) { roleMsg = ' (role failed: ' + e.message + ')'; }
     }
     logActivity({ kind: alt.isAlt ? 'alt-flag' : 'verified', guildId: g.guildId, actor: me.username, msg: `${me.username} verified${alt.isAlt ? ' FLAGGED alt [' + alt.flags.join(', ') + ']' : ''} ip=${ip}${roleMsg}` });
@@ -472,6 +475,43 @@ app.delete('/api/guild/:id/members/:uid', requireGuildAdmin, async (req, res) =>
   }
   logActivity({ kind: 'revoke', guildId: req.params.id, actor: req.session.user.username, msg: `${u.username} verification revoked` });
   res.json({ ok: true });
+});
+
+// setup doctor: can the bot actually hand out the configured role + reach the log?
+// answers why-not in plain words instead of a silent missing role.
+app.get('/api/guild/:id/rolecheck', requireGuildAdmin, async (req, res) => {
+  try {
+    db = load();
+    const g = getGuild(db, req.params.id); save(db);
+    if (!DISCORD_BOT_TOKEN || String(DISCORD_BOT_TOKEN).startsWith('test_')) return res.json({ ok: false, reasons: ['no real bot token on this server'] });
+    if (!g.verifyRoleId) return res.json({ ok: false, reasons: ['no verified role picked — run /verify-setup with a role'] });
+    if (!g.logChannelId) return res.json({ ok: false, reasons: ['no log channel picked — run /verify-setup with a channel'] });
+    const headers = { Authorization: `Bot ${DISCORD_BOT_TOKEN}` };
+    const guild = await fetch(`https://discord.com/api/v10/guilds/${req.params.id}`, { headers }).then(r => { if (!r.ok) throw new Error('bot is not in this server (or the token is wrong): discord ' + r.status); return r.json(); });
+    let botId = null;
+    try { botId = Buffer.from(String(DISCORD_BOT_TOKEN).split('.')[0], 'base64').toString().replace(/[^0-9]/g, ''); } catch {}
+    if (!botId || !/^[0-9]{10,}$/.test(botId)) botId = await fetch('https://discord.com/api/v10/users/@me', { headers }).then(r => r.json()).then(j => j.id);
+    const member = await fetch(`https://discord.com/api/v10/guilds/${req.params.id}/members/${botId}`, { headers }).then(r => { if (!r.ok) throw new Error('cannot see the bot in this server: discord ' + r.status); return r.json(); });
+    const byId = Object.fromEntries((guild.roles || []).map(r => [r.id, r]));
+    const target = byId[g.verifyRoleId];
+    const reasons = [];
+    if (!target) reasons.push('verified role no longer exists — re-run /verify-setup');
+    const owner = guild.owner_id === botId;
+    let top = 0, canManage = owner;
+    for (const rid of (member.roles || [])) {
+      const r = byId[rid]; if (!r) continue;
+      top = Math.max(top, r.position);
+      try {
+        const p = BigInt(r.permissions);
+        if ((p & 0x8n) !== 0n || (p & 0x10000000n) !== 0n) canManage = true;
+      } catch {}
+    }
+    if (!canManage) reasons.push('bot lacks Manage Roles (or Administrator) — server settings → roles → tick it');
+    if (target && !owner && top <= target.position) reasons.push('bot role sits below the verified role — drag the bot role above it');
+    const ch = await fetch(`https://discord.com/api/v10/channels/${g.logChannelId}`, { headers }).then(r => r.ok ? r.json() : null).catch(() => null);
+    if (!ch) reasons.push('log channel unreadable — re-pick it in /verify-setup');
+    res.json({ ok: reasons.length === 0, reasons });
+  } catch (e) { res.status(500).json({ ok: false, reasons: [e.message] }); }
 });
 
 // ---- developer API (header x-api-key) ----

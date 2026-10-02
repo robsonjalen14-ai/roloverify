@@ -44,7 +44,7 @@ client.on('interactionCreate', async (ix) => {
     g2.logChannelId = log.id; g2.verifyRoleId = role.id;
     save(db2);
     const url = `${BASE_URL}/v/${g2.verifySlug}`;
-    const emb = new EmbedBuilder().setTitle(g2.embed.title).setDescription(g2.embed.description + `\n\n[Verify here](${url})`).setColor(parseInt(g2.embed.color.replace('#', ''), 16) || 0x5865F2);
+    const emb = new EmbedBuilder().setTitle(g2.embed.title).setDescription(g2.embed.description + `\n\n[Verify here](${url})`).setColor(parseInt(g2.embed.color.replace('#', ''), 16) || 0x2D7DFF).setFooter({ text: 'Rolo Verify' });
     const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setLabel(g2.embed.buttonLabel || 'Verify Now').setStyle(ButtonStyle.Link).setURL(url));
     await ix.channel.send({ embeds: [emb], components: [row] });
     await ix.reply({ content: `verify live → ${url}\nrole <@&${role.id}> on verify, cards in <#${log.id}>`, ephemeral: true });
