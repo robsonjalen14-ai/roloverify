@@ -48,6 +48,25 @@ function requireLogin(req, res, next) {
   if (!req.session.user) return res.status(401).json({ error: 'login required' });
   next();
 }
+// admin gate: only servers where you hold Manage Server (0x20) open their dashboard.
+// purpose: stops members opening another server's config by guessing its id.
+// inputs: session token + :id param. outputs: next() or 401/403/500 json.
+async function guildAdminIds(accessToken) {
+  const guilds = await discordFetch('Bearer', accessToken, '/users/@me/guilds');
+  return new Set(guilds.filter(g => { try { return (BigInt(g.permissions) & 0x20n) !== 0n; } catch { return false; } }).map(g => g.id));
+}
+async function requireGuildAdmin(req, res, next) {
+  if (!req.session.user) return res.status(401).json({ error: 'login required' });
+  try {
+    if (req.session.user.demo) {
+      if (req.params.id !== DEMO_GUILD_ID) return res.status(403).json({ error: 'demo mode: this server is not yours' });
+      return next();
+    }
+    const ids = await guildAdminIds(req.session.user.accessToken);
+    if (!ids.has(req.params.id)) return res.status(403).json({ error: 'admin only: you need Manage Server permission on this server' });
+    next();
+  } catch (e) { res.status(500).json({ error: 'could not check your permissions: ' + e.message }); }
+}
 function guildApiKey(guildId) {
   db = load();
   if (!db.apiKeys[guildId]) {
@@ -150,17 +169,18 @@ app.get('/api/my-guilds', requireLogin, async (req, res) => {
   try {
     if (req.session.user.demo) return res.json({ guilds: [{ id: DEMO_GUILD_ID, name: 'Demo Server (local test)' }] });
     const guilds = await discordFetch('Bearer', req.session.user.accessToken, '/users/@me/guilds');
-    res.json({ guilds });
+    // admin servers only — members never see the dashboard
+    res.json({ guilds: guilds.filter(g => { try { return (BigInt(g.permissions) & 0x20n) !== 0n; } catch { return false; } }) });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ---- dashboard config api ----
-app.get('/api/guild/:id/config', requireLogin, (req, res) => {
+app.get('/api/guild/:id/config', requireGuildAdmin, (req, res) => {
   db = load();
   res.json({ config: getGuild(db, req.params.id) });
   save(db);
 });
-app.post('/api/guild/:id/config', requireLogin, (req, res) => {
+app.post('/api/guild/:id/config', requireGuildAdmin, (req, res) => {
   db = load();
   const g = getGuild(db, req.params.id);
   const { vpnBlock, altDetection, requireVerified, verifySlug, embed, logChannelId, verifyRoleId } = req.body || {};
@@ -191,10 +211,10 @@ app.post('/api/guild/:id/config', requireLogin, (req, res) => {
   logActivity({ kind: 'config', guildId: req.params.id, actor: req.session.user.username, msg: 'config updated' });
   res.json({ ok: true, config: g });
 });
-app.get('/api/guild/:id/apikey', requireLogin, (req, res) => {
+app.get('/api/guild/:id/apikey', requireGuildAdmin, (req, res) => {
   res.json({ apiKey: guildApiKey(req.params.id) });
 });
-app.post('/api/guild/:id/rotate-key', requireLogin, (req, res) => {
+app.post('/api/guild/:id/rotate-key', requireGuildAdmin, (req, res) => {
   db = load();
   db.apiKeys[req.params.id] = 'rv_' + crypto.randomBytes(24).toString('hex');
   save(db);
@@ -202,7 +222,7 @@ app.post('/api/guild/:id/rotate-key', requireLogin, (req, res) => {
 });
 
 // ---- live activity console (SSE) ----
-app.get('/api/guild/:id/activity', requireLogin, (req, res) => {
+app.get('/api/guild/:id/activity', requireGuildAdmin, (req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
   sseClients.add(res);
   db = load();
@@ -212,7 +232,7 @@ app.get('/api/guild/:id/activity', requireLogin, (req, res) => {
 });
 
 // ---- member snapshot + 1-click restore ----
-app.post('/api/guild/:id/snapshot', requireLogin, (req, res) => {
+app.post('/api/guild/:id/snapshot', requireGuildAdmin, (req, res) => {
   db = load();
   getGuild(db, req.params.id); save(db);
   const verified = Object.values(db.users).filter(u => u.guilds && u.guilds[req.params.id]);
@@ -223,11 +243,11 @@ app.post('/api/guild/:id/snapshot', requireLogin, (req, res) => {
   logActivity({ kind: 'snapshot', guildId: req.params.id, actor: req.session.user.username, msg: `snapshot ${snapId} sealed (${verified.length} members)` });
   res.json({ ok: true, snapId, count: verified.length });
 });
-app.get('/api/guild/:id/snapshots', requireLogin, (req, res) => {
+app.get('/api/guild/:id/snapshots', requireGuildAdmin, (req, res) => {
   db = load();
   res.json({ snapshots: Object.values(db.snapshots).filter(s => s.guildId === req.params.id).reverse() });
 });
-app.post('/api/guild/:id/restore', requireLogin, async (req, res) => {
+app.post('/api/guild/:id/restore', requireGuildAdmin, async (req, res) => {
   // re-adds verified members to a NEW guild via guilds.join (needs user tokens + bot in target guild)
   if (req.session.user.demo) return res.status(400).json({ error: 'demo mode: connect a real Discord app to restore real members' });
   const targetGuildId = (req.body || {}).targetGuildId || req.params.id;
@@ -303,6 +323,24 @@ app.post('/api/verify/:slug', async (req, res) => {
     logActivity({ kind: alt.isAlt ? 'alt-flag' : 'verified', guildId: g.guildId, actor: me.username, msg: `${me.username} verified${alt.isAlt ? ' FLAGGED alt [' + alt.flags.join(', ') + ']' : ''}` });
     res.json({ ok: true, userId: me.id, alt, guildId: g.guildId });
   } catch (e) { res.status(500).json({ error: 'something went wrong: ' + e.message }); }
+});
+
+// ---- members page: who verified on this server ----
+app.get('/api/guild/:id/members', requireGuildAdmin, (req, res) => {
+  db = load();
+  const list = Object.values(db.users)
+    .filter(u => u.guilds && u.guilds[req.params.id])
+    .map(u => ({ id: u.id, username: u.username, avatar: u.avatar, at: u.guilds[req.params.id].at, altScore: u.guilds[req.params.id].altScore || 0 }));
+  res.json({ count: list.length, members: list });
+});
+app.delete('/api/guild/:id/members/:uid', requireGuildAdmin, (req, res) => {
+  db = load();
+  const u = db.users[req.params.uid];
+  if (!u || !u.guilds || !u.guilds[req.params.id]) return res.status(404).json({ error: 'member is not verified on this server' });
+  delete u.guilds[req.params.id];
+  save(db);
+  logActivity({ kind: 'revoke', guildId: req.params.id, actor: req.session.user.username, msg: `${u.username} verification revoked` });
+  res.json({ ok: true });
 });
 
 // ---- developer API (header x-api-key) ----

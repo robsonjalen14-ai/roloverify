@@ -16,7 +16,7 @@ function dbLog(entry) {
 }
 
 client.once('ready', async () => {
-  console.log(`bot in as ${client.user.tag}`);
+  console.log('> rolo-verify v1.0\n> connecting to discord...\n> logged in as ' + client.user.tag + '\n> watching for new members...\n> verification enabled.\n> ready.');
   const cmds = [
     new SlashCommandBuilder().setName('verify-setup').setDescription('post the verify embed here')
       .addChannelOption(o => o.setName('log').setDescription('log channel').setRequired(false))

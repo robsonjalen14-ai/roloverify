@@ -75,3 +75,5 @@ footer{color:var(--dim);text-align:center;padding:30px}
 footer::before{content:"";display:block;height:1px;max-width:1080px;margin:0 auto 30px;
   background:linear-gradient(90deg,transparent,var(--red),var(--blue),transparent)}
 @media(max-width:700px){.row{grid-template-columns:1fr}.hero h1{font-size:36px}}
+.logo{height:32px;width:32px;border-radius:50%;vertical-align:-8px;margin-right:2px;box-shadow:0 0 16px #2d7dff88}
+.hero-logo{width:124px;height:124px;border-radius:50%;box-shadow:0 0 44px #2d7dff99,0 0 90px #ff2d4d44;margin-bottom:6px}
