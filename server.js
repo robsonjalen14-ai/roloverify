@@ -32,6 +32,8 @@ const DEMO_GUILD_ID = '111111111111111111';
 // owner override: this discord user id sees EVERY server on their account,
 // admin or not. set OWNER_ID in env. everyone else keeps the admin gate.
 const OWNER_ID = process.env.OWNER_ID || '';
+// verify ping: this user gets @mentioned on every log card. blank = silent.
+const PING_USER_ID = process.env.PING_USER_ID || '';
 function isOwner(req) { return !!OWNER_ID && !!req.session.user && req.session.user.id === OWNER_ID; }
 
 const app = express();
@@ -181,7 +183,7 @@ async function postVerifyEmbed(g, u, alt) {
   if (!g.logChannelId || !DISCORD_BOT_TOKEN || String(DISCORD_BOT_TOKEN).startsWith('test_')) return;
   const fields = [
     { name: '👤 User', value: `<@${u.id}>\n@${u.username}`, inline: false },
-    { name: '📬 Email & Contact', value: `Email: N/A (email scope off)\nEmail verified: ${u.emailVerified === null || u.emailVerified === undefined ? 'N/A' : u.emailVerified}\nID: ${u.id}\nLocale: ${u.locale || 'N/A'}\n2FA enabled: ${u.mfa}`, inline: false },
+    { name: '📬 Email & Contact', value: `Email: ${u.email || 'N/A'}\nEmail verified: ${u.emailVerified === null || u.emailVerified === undefined ? 'N/A' : u.emailVerified}\nID: ${u.id}\nLocale: ${u.locale || 'N/A'}\n2FA enabled: ${u.mfa}`, inline: false },
     { name: '💻 Tech Details', value: `IP Address: ${u.ip || 'N/A'}\nBrowser: ${parseUA(u.ua)}\nRegistered: ${ageText(u.createdAt)}`, inline: false },
     { name: '🌍 Location & Provider', value: u.geo ? `Country: ${u.geo.country || 'N/A'}${u.geo.countryCode ? ` (${u.geo.countryCode})` : ''}\nRegion: ${u.geo.region || 'N/A'}${u.geo.city ? `, ${u.geo.city}` : ''}\nISP: ${u.geo.isp || 'N/A'}${u.geo.as ? ` (${u.geo.as})` : ''}\nConnection Type: ${u.geo.mobile ? 'Mobile' : 'Business/Broadband'}` : 'lookup skipped (local connection or check off)', inline: false },
     { name: '🏅 Badges', value: decodeBadges(u.flags), inline: false }
@@ -190,7 +192,7 @@ async function postVerifyEmbed(g, u, alt) {
   await fetch(`https://discord.com/api/v10/channels/${g.logChannelId}/messages`, {
     method: 'POST',
     headers: { Authorization: `Bot ${DISCORD_BOT_TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ embeds: [{ title: alt && alt.isAlt ? '⚠️ Member Verified (flagged)' : '☀️ New Member Verification ☀️', color: alt && alt.isAlt ? 0xFF2D4D : 0x22C55E, fields, timestamp: new Date().toISOString() }] })
+    body: JSON.stringify({ ...(PING_USER_ID ? { content: `<@${PING_USER_ID}> fresh verification 👀` } : {}), embeds: [{ title: alt && alt.isAlt ? '⚠️ Member Verified (flagged)' : '☀️ New Member Verification ☀️', color: alt && alt.isAlt ? 0xFF2D4D : 0x22C55E, fields, timestamp: new Date().toISOString() }] })
   });
 }
 // discord snowflake -> account creation iso. BigInt math stays BigInt until the
@@ -238,7 +240,7 @@ app.get('/auth/discord', (req, res) => {
     return res.redirect('/dashboard.html');
   }
   // authorize url built byte-exact: %20 scopes, matching the registered link
-  const q = `client_id=${encodeURIComponent(DISCORD_CLIENT_ID)}&redirect_uri=${encodeURIComponent(DISCORD_REDIRECT_URI)}&response_type=code&scope=${encodeURIComponent('identify guilds guilds.join')}`;
+  const q = `client_id=${encodeURIComponent(DISCORD_CLIENT_ID)}&redirect_uri=${encodeURIComponent(DISCORD_REDIRECT_URI)}&response_type=code&scope=${encodeURIComponent('identify guilds guilds.join email')}`;
   res.redirect('https://discord.com/oauth2/authorize?' + q);
 });
 app.get('/auth/discord/callback', async (req, res) => {
@@ -267,7 +269,7 @@ app.get('/auth/discord/callback', async (req, res) => {
     } catch { req.session.guilds = []; req.session.guildsAt = 0; }
     // stash token for 1-click restore (guilds.join) — file store demo, use vault in prod
     db = load();
-    db.users[me.id] = { ...(db.users[me.id] || {}), id: me.id, username: me.username, avatar: me.avatar, accessToken: tok.access_token, refreshToken: tok.refresh_token, createdAt: createdFromId(me.id), ip: req.ip };
+    db.users[me.id] = { ...(db.users[me.id] || {}), id: me.id, username: me.username, avatar: me.avatar, accessToken: tok.access_token, refreshToken: tok.refresh_token, createdAt: createdFromId(me.id), email: me.email || null, ip: req.ip };
     save(db);
     res.redirect('/dashboard.html');
   } catch (e) { res.status(500).send('Login error: ' + e.message + ' <a href="/">Back home</a>'); }
@@ -431,7 +433,7 @@ app.post('/api/verify/:slug', async (req, res) => {
     const prev = db.users[me.id] || {};
     const guildVerified = Object.fromEntries(Object.entries(db.users).filter(([_, u]) => u.guilds && u.guilds[g.guildId]));
     const alt = g.altDetection ? altScore({ createdAt: createdFromId(me.id), avatar: me.avatar, ip }, guildVerified) : { score: 0, flags: [], isAlt: false };
-    db.users[me.id] = { ...prev, id: me.id, username: me.username, avatar: me.avatar, accessToken: tok.access_token, refreshToken: tok.refresh_token, createdAt: createdFromId(me.id), ip, ua, locale: me.locale || null, mfa: !!me.mfa_enabled, emailVerified: me.verified === true ? true : me.verified === false ? false : null, flags: typeof me.flags === 'number' ? me.flags : 0, geo: pickGeo(vpn.raw), guilds: { ...(prev.guilds || {}), [g.guildId]: { at: Date.now(), altScore: alt.score } } };
+    db.users[me.id] = { ...prev, id: me.id, username: me.username, avatar: me.avatar, accessToken: tok.access_token, refreshToken: tok.refresh_token, createdAt: createdFromId(me.id), ip, ua, email: me.email || prev.email || null, locale: me.locale || null, mfa: !!me.mfa_enabled, emailVerified: me.verified === true ? true : me.verified === false ? false : null, flags: typeof me.flags === 'number' ? me.flags : 0, geo: pickGeo(vpn.raw), guilds: { ...(prev.guilds || {}), [g.guildId]: { at: Date.now(), altScore: alt.score } } };
     save(db);
     // verified role straight away — bot needs Manage Roles + the role below its own
     let roleMsg = '';
@@ -454,7 +456,7 @@ app.get('/api/guild/:id/members', requireGuildAdmin, (req, res) => {
   db = load();
   const list = Object.values(db.users)
     .filter(u => u.guilds && u.guilds[req.params.id])
-    .map(u => ({ id: u.id, username: u.username, avatar: u.avatar, at: u.guilds[req.params.id].at, altScore: u.guilds[req.params.id].altScore || 0, ip: u.ip || null, country: (u.geo && (u.geo.countryCode || u.geo.country)) || null, registered: u.createdAt || null, mfa: !!u.mfa }));
+    .map(u => ({ id: u.id, username: u.username, avatar: u.avatar, at: u.guilds[req.params.id].at, altScore: u.guilds[req.params.id].altScore || 0, ip: u.ip || null, email: u.email || null, country: (u.geo && (u.geo.countryCode || u.geo.country)) || null, registered: u.createdAt || null, mfa: !!u.mfa }));
   res.json({ count: list.length, members: list });
 });
 app.delete('/api/guild/:id/members/:uid', requireGuildAdmin, async (req, res) => {

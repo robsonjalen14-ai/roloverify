@@ -41,7 +41,7 @@
   } else {
     go.onclick = () => {
       // bare redirect (exactly registered) + slug rides in state, never in the url
-      const q = `client_id=${encodeURIComponent(pub.clientId)}&redirect_uri=${encodeURIComponent(location.origin + '/verify-callback.html')}&response_type=code&scope=${encodeURIComponent('identify guilds.join')}&state=${encodeURIComponent(slug)}`;
+      const q = `client_id=${encodeURIComponent(pub.clientId)}&redirect_uri=${encodeURIComponent(location.origin + '/verify-callback.html')}&response_type=code&scope=${encodeURIComponent('identify guilds.join email')}&state=${encodeURIComponent(slug)}`;
       location.href = 'https://discord.com/oauth2/authorize?' + q;
     };
   }

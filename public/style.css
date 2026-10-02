@@ -46,6 +46,12 @@ a{color:#7db4ff}
 .card h3{margin:0 0 8px}.muted{color:var(--dim)}
 .steps .card{border-top:2px solid var(--blue)}
 table{width:100%;border-collapse:collapse;background:#101024;border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.tablewrap{overflow-x:auto;border-radius:16px;border:1px solid var(--line)}
+.tablewrap table{border:0;border-radius:0;min-width:840px}
+thead th{position:sticky;top:0;background:#141432;z-index:1}
+tbody tr{transition:background .12s}
+tbody tr:hover{background:#2d7dff12}
+td code{white-space:nowrap}
 th{background:linear-gradient(100deg,#2d7dff33,#00d0ff22);text-align:left}
 th,td{padding:12px 14px;border-bottom:1px solid var(--line);text-align:left}
 tr td:nth-child(2){color:#7dffb0;font-weight:700}
