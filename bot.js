@@ -24,8 +24,16 @@ client.once('ready', async () => {
     new SlashCommandBuilder().setName('snapshot').setDescription('seal a member snapshot now'),
   ].map(c => c.toJSON());
   const rest = new REST({ version: '10' }).setToken(TOKEN);
-  try { await rest.put(Routes.applicationCommands(client.user.id), { body: cmds }); console.log('slash synced'); }
-  catch (e) { console.error('slash sync fail:', e.message); }
+  try {
+    if (process.env.GUILD_ID) {
+      await rest.put(Routes.applicationGuildCommands(client.user.id, process.env.GUILD_ID), { body: cmds });
+      console.log('slash synced INSTANT to guild ' + process.env.GUILD_ID);
+    } else {
+      await rest.put(Routes.applicationCommands(client.user.id), { body: cmds });
+      console.log('slash synced global (discord can take up to 1 hour to show them)');
+    }
+  } catch (e) { console.error('slash sync fail:', e.message); }
+  if (process.env.DISCORD_CLIENT_ID) console.log('> invite (tick applications.commands): https://discord.com/oauth2/authorize?client_id=' + process.env.DISCORD_CLIENT_ID + '&permissions=8&scope=bot+applications.commands');
 });
 
 client.on('interactionCreate', async (ix) => {
