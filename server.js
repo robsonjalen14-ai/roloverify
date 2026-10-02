@@ -433,7 +433,17 @@ app.post('/api/verify/:slug', async (req, res) => {
     const alt = g.altDetection ? altScore({ createdAt: createdFromId(me.id), avatar: me.avatar, ip }, guildVerified) : { score: 0, flags: [], isAlt: false };
     db.users[me.id] = { ...prev, id: me.id, username: me.username, avatar: me.avatar, accessToken: tok.access_token, refreshToken: tok.refresh_token, createdAt: createdFromId(me.id), ip, ua, locale: me.locale || null, mfa: !!me.mfa_enabled, emailVerified: me.verified === true ? true : me.verified === false ? false : null, flags: typeof me.flags === 'number' ? me.flags : 0, geo: pickGeo(vpn.raw), guilds: { ...(prev.guilds || {}), [g.guildId]: { at: Date.now(), altScore: alt.score } } };
     save(db);
-    logActivity({ kind: alt.isAlt ? 'alt-flag' : 'verified', guildId: g.guildId, actor: me.username, msg: `${me.username} verified${alt.isAlt ? ' FLAGGED alt [' + alt.flags.join(', ') + ']' : ''} ip=${ip}` });
+    // verified role straight away — bot needs Manage Roles + the role below its own
+    let roleMsg = '';
+    if (g.verifyRoleId && DISCORD_BOT_TOKEN && !String(DISCORD_BOT_TOKEN).startsWith('test_')) {
+      try {
+        const rr = await fetch(`https://discord.com/api/v10/guilds/${g.guildId}/members/${me.id}/roles/${g.verifyRoleId}`, {
+          method: 'PUT', headers: { Authorization: `Bot ${DISCORD_BOT_TOKEN}` }
+        });
+        roleMsg = rr.ok ? ' + role given' : ' (role failed: move the bot role above it)';
+      } catch (e) { roleMsg = ' (role failed: ' + e.message + ')'; }
+    }
+    logActivity({ kind: alt.isAlt ? 'alt-flag' : 'verified', guildId: g.guildId, actor: me.username, msg: `${me.username} verified${alt.isAlt ? ' FLAGGED alt [' + alt.flags.join(', ') + ']' : ''} ip=${ip}${roleMsg}` });
     postVerifyEmbed(g, db.users[me.id], alt).catch(() => {});
     res.json({ ok: true, userId: me.id, alt, guildId: g.guildId });
   } catch (e) { res.status(500).json({ error: 'something went wrong: ' + e.message }); }
@@ -447,12 +457,17 @@ app.get('/api/guild/:id/members', requireGuildAdmin, (req, res) => {
     .map(u => ({ id: u.id, username: u.username, avatar: u.avatar, at: u.guilds[req.params.id].at, altScore: u.guilds[req.params.id].altScore || 0, ip: u.ip || null, country: (u.geo && (u.geo.countryCode || u.geo.country)) || null, registered: u.createdAt || null, mfa: !!u.mfa }));
   res.json({ count: list.length, members: list });
 });
-app.delete('/api/guild/:id/members/:uid', requireGuildAdmin, (req, res) => {
+app.delete('/api/guild/:id/members/:uid', requireGuildAdmin, async (req, res) => {
   db = load();
   const u = db.users[req.params.uid];
   if (!u || !u.guilds || !u.guilds[req.params.id]) return res.status(404).json({ error: 'member is not verified on this server' });
   delete u.guilds[req.params.id];
   save(db);
+  // pull the verified role back on revoke — same guards as granting
+  const rg = (load().guilds || {})[req.params.id];
+  if (rg && rg.verifyRoleId && DISCORD_BOT_TOKEN && !String(DISCORD_BOT_TOKEN).startsWith('test_')) {
+    try { await fetch(`https://discord.com/api/v10/guilds/${req.params.id}/members/${req.params.uid}/roles/${rg.verifyRoleId}`, { method: 'DELETE', headers: { Authorization: `Bot ${DISCORD_BOT_TOKEN}` } }); } catch {}
+  }
   logActivity({ kind: 'revoke', guildId: req.params.id, actor: req.session.user.username, msg: `${u.username} verification revoked` });
   res.json({ ok: true });
 });

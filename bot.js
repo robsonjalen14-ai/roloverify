@@ -21,8 +21,8 @@ client.once('ready', async () => {
   console.log('> status: dnd, playing Rolo Verify');
   const cmds = [
     new SlashCommandBuilder().setName('verify-setup').setDescription('post the verify embed here')
-      .addChannelOption(o => o.setName('log').setDescription('log channel').setRequired(false))
-      .addRoleOption(o => o.setName('role').setDescription('role given after verify').setRequired(false)),
+      .addRoleOption(o => o.setName('role').setDescription('role members get after verifying').setRequired(true))
+      .addChannelOption(o => o.setName('log').setDescription('channel for verify log cards').setRequired(true)),
     new SlashCommandBuilder().setName('snapshot').setDescription('seal a member snapshot now'),
   ].map(c => c.toJSON());
   const rest = new REST({ version: '10' }).setToken(TOKEN);
@@ -41,14 +41,13 @@ client.on('interactionCreate', async (ix) => {
   if (ix.commandName === 'verify-setup') {
     const log = ix.options.getChannel('log'); const role = ix.options.getRole('role');
     const db2 = load(); const g2 = getGuild(db2, ix.guildId);
-    if (log) g2.logChannelId = log.id;
-    if (role) g2.verifyRoleId = role.id;
+    g2.logChannelId = log.id; g2.verifyRoleId = role.id;
     save(db2);
     const url = `${BASE_URL}/v/${g2.verifySlug}`;
     const emb = new EmbedBuilder().setTitle(g2.embed.title).setDescription(g2.embed.description + `\n\n[Verify here](${url})`).setColor(parseInt(g2.embed.color.replace('#', ''), 16) || 0x5865F2);
     const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setLabel(g2.embed.buttonLabel || 'Verify Now').setStyle(ButtonStyle.Link).setURL(url));
     await ix.channel.send({ embeds: [emb], components: [row] });
-    await ix.reply({ content: `verify live → ${url}`, ephemeral: true });
+    await ix.reply({ content: `verify live → ${url}\nrole <@&${role.id}> on verify, cards in <#${log.id}>`, ephemeral: true });
     dbLog({ kind: 'config', guildId: ix.guildId, actor: ix.user.username, msg: `verify embed deployed by ${ix.user.username}` });
   }
   if (ix.commandName === 'snapshot') {
