@@ -192,7 +192,7 @@ async function postVerifyEmbed(g, u, alt) {
   await fetch(`https://discord.com/api/v10/channels/${g.logChannelId}/messages`, {
     method: 'POST',
     headers: { Authorization: `Bot ${DISCORD_BOT_TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ...(PING_USER_ID ? { content: `<@${PING_USER_ID}> fresh verification 👀` } : {}), embeds: [{ title: alt && alt.isAlt ? '⚠️ Member Verified (flagged)' : '☀️ New Member Verification ☀️', color: alt && alt.isAlt ? 0xFF2D4D : 0x2D7DFF, author: { name: 'Rolo Verify' }, thumbnail: u.avatar ? { url: `https://cdn.discord.com/avatars/${u.id}/${u.avatar}.png` } : undefined, fields, footer: { text: 'Rolo Verify • automated check' }, timestamp: new Date().toISOString() }] })
+    body: JSON.stringify({ ...(PING_USER_ID ? { content: `<@${PING_USER_ID}> fresh verification 👀` } : {}), embeds: [{ title: alt && alt.isAlt ? 'Member verified (flagged)' : 'New member verified', color: alt && alt.isAlt ? 0xFF2D4D : 0x2D7DFF, author: { name: 'Rolo Verify' }, thumbnail: u.avatar ? { url: `https://cdn.discord.com/avatars/${u.id}/${u.avatar}.png` } : undefined, fields, footer: { text: 'Rolo Verify • automated check' }, timestamp: new Date().toISOString() }] })
   });
 }
 // discord snowflake -> account creation iso. BigInt math stays BigInt until the

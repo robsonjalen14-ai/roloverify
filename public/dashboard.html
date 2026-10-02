@@ -17,7 +17,7 @@
 <div class="banner" id="banner"></div>
 <div class="toprow"><h2 style="margin:0">Server dashboard</h2><p class="muted" style="margin:4px 0 18px">Your verify page: <a id="vurl" target="_blank" rel="noopener"></a></p></div>
 <div class="card" id="protection"><h3>Protection</h3>
-<p class="muted">Blocked joins and flagged alts show up in the activity console below.</p>
+<p class="muted">Blocked joins and flagged alts land in the console below.</p>
 <div class="toggle"><span>VPN / Proxy Blocking</span><input type="checkbox" id="vpnBlock"></div>
 <div class="toggle"><span>Alt Account Detection</span><input type="checkbox" id="altDetection"></div>
 <div class="toggle"><span>Require Verified to stay</span><input type="checkbox" id="requireVerified"></div>
@@ -27,15 +27,15 @@
 <button class="btn" id="save" style="margin-top:12px">Save settings</button> <button class="btn ghost" id="rolecheck" style="margin-top:12px">Check bot setup</button> <span id="saveMsg" class="muted"></span>
 </div>
 <div class="card" id="design"><h3>Verify page design</h3>
-<p class="muted">This is what members see when they open your verify link.</p>
+<p class="muted">Members see exactly this.</p>
 <label for="eTitle">Title</label><input id="eTitle" maxlength="120"><label for="eDesc">Description</label><textarea id="eDesc" rows="3" maxlength="1000"></textarea>
 <div class="row"><div><label for="eColor">Color</label><input id="eColor" placeholder="#5865F2"></div><div><label for="eBtn">Button text</label><input id="eBtn" maxlength="40"></div></div>
 </div>
 <div class="card" id="snapshots"><h3>Snapshots + Restore</h3>
-<p class="muted">Snapshots remember every verified member. If your server is ever deleted, restore them all to a new one in one click.</p>
+<p class="muted">Snapshots remember every verified member. Server deleted? Bring them all back in one click.</p>
 <button class="btn" id="snap">Take snapshot now</button> <button class="btn ghost" id="restore">Restore members</button>
 <label for="targetGuild">Restore into server ID (leave empty = this server)</label><input id="targetGuild" placeholder="New server id">
 <div id="snaps" class="muted" style="margin-top:10px">Loading snapshots…</div></div>
-<div class="card" id="activity"><h3>Live Activity</h3><p class="muted">Verifications, blocks, snapshots and restores appear here in real time.</p><div id="console"><div class="muted">Connecting…</div></div></div>
+<div class="card" id="activity"><h3>Live Activity</h3><p class="muted">Everything lands here live.</p><div id="console"><div class="muted">Connecting…</div></div></div>
 </div></div>
 <script src="/dashboard.js"></script></body></html>

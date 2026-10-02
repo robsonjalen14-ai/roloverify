@@ -22,18 +22,21 @@ function getGuild(db, guildId) {
       altDetection: true,
       requireVerified: true,
       verifySlug: 'verify-' + guildId.slice(-6).toLowerCase(),
-      embed: { title: '🔒 Verify For Access To Server!', description: 'Click Verify Now below to link your Discord — your role lands instantly, and you stay restorable forever.', color: '#2D7DFF', buttonLabel: 'Verify Now' },
+      embed: { title: 'Verify to get in', description: 'One click with Discord and you are in. Takes about ten seconds.', color: '#2D7DFF', buttonLabel: 'Verify Now' },
       logChannelId: null,
       verifyRoleId: null,
       createdAt: Date.now()
     };
     return db.guilds[guildId];
   }
-  // one-time facelift: untouched old defaults upgrade to the new gate look
+  // one-time facelift: untouched stock wordings upgrade to the plain version
   const g = db.guilds[guildId];
-  if (g.embed && g.embed.title === 'Verify to enter' && String(g.embed.description || '').startsWith('Click verify to link')) {
-    g.embed.title = '🔒 Verify For Access To Server!';
-    g.embed.description = 'Click Verify Now below to link your Discord — your role lands instantly, and you stay restorable forever.';
+  const d = String((g.embed && g.embed.description) || '');
+  const stockV1 = g.embed && g.embed.title === 'Verify to enter' && d.startsWith('Click verify to link');
+  const stockV2 = g.embed && g.embed.title === '🔒 Verify For Access To Server!';
+  if (stockV1 || stockV2) {
+    g.embed.title = 'Verify to get in';
+    g.embed.description = 'One click with Discord and you are in. Takes about ten seconds.';
   }
   if (g.embed && g.embed.color === '#5865F2') g.embed.color = '#2D7DFF';
   return g;
