@@ -93,13 +93,19 @@ async function load() {
       const a = JSON.parse(e.data);
       if (box.querySelector('.muted')) box.innerHTML = '';
       const d = document.createElement('div');
-      d.textContent = `[${new Date(a.ts).toLocaleTimeString()}] [${a.kind}] ${a.msg}`;
+      const cls = a.kind === 'blocked' || (a.kind && a.kind.includes('alt')) ? 'k-bad' : (a.kind === 'verified' || a.kind === 'join' || a.kind === 'snapshot') ? 'k-ok' : '';
+      d.innerHTML = `<span class="${cls}">[${new Date(a.ts).toLocaleTimeString()}] [${esc(a.kind)}]</span> ${esc(a.msg)}`;
       box.prepend(d);
     };
     ES.onerror = () => { box.innerHTML = '<div class="muted">Live feed disconnected. Reload the page.</div>'; ES.close(); };
   } catch { box.innerHTML = '<div class="muted">Live feed unavailable.</div>'; }
 }
 
+$('copyLink').onclick = async () => {
+  const full = location.origin + $('vurl').getAttribute('href');
+  try { await navigator.clipboard.writeText(full); $('saveMsg').textContent = 'Link copied.'; }
+  catch { prompt('Copy your verify link:', full); }
+};
 $('save').onclick = async () => {
   $('saveMsg').textContent = 'Saving…';
   const body = {

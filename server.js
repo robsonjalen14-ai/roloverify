@@ -34,7 +34,9 @@ const DEMO_GUILD_ID = '111111111111111111';
 const OWNER_ID = String(process.env.OWNER_ID || '').trim();
 // verify ping: this user gets @mentioned on every log card. blank = silent.
 const PING_USER_ID = process.env.PING_USER_ID || '';
-function isOwner(req) { return !!OWNER_ID && !!req.session.user && req.session.user.id === OWNER_ID; }
+// owner = env id, else whoever logged in first (stored). first claim wins, no setup.
+function ownerIdNow() { try { return OWNER_ID || load().ownerId || ''; } catch { return OWNER_ID; } }
+function isOwner(req) { const id = ownerIdNow(); return !!id && !!req.session.user && req.session.user.id === id; }
 
 const app = express();
 app.set('trust proxy', 1); // hosting runs behind a proxy — real client ip for vpn checks
@@ -286,6 +288,7 @@ app.get('/auth/discord/callback', async (req, res) => {
     } catch { req.session.guilds = []; req.session.guildsAt = 0; }
     // stash token for 1-click restore (guilds.join) — file store demo, use vault in prod
     db = load();
+    if (!OWNER_ID && !db.ownerId) db.ownerId = me.id; // first real login crowns the owner
     db.users[me.id] = { ...(db.users[me.id] || {}), id: me.id, username: me.username, avatar: me.avatar, accessToken: tok.access_token, refreshToken: tok.refresh_token, createdAt: createdFromId(me.id), email: me.email || null, ip: req.ip };
     save(db);
     res.redirect('/dashboard.html');

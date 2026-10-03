@@ -66,6 +66,8 @@ label{display:block;margin:12px 0 6px;color:var(--dim)}
 .toggle input{width:auto;accent-color:var(--blue)}
 #console{background:#05050c;border:1px solid var(--line);border-radius:12px;height:300px;overflow:auto;
   padding:12px;font-family:ui-monospace,Consolas,monospace;font-size:13px}
+#console .k-ok{color:#7dffb0}
+#console .k-bad{color:#ff8ba0}
 .pill{display:inline-block;padding:3px 12px;border-radius:999px;font-size:12px;font-weight:700;
   border:1px solid #2d7dff88;color:#9dc2ff;background:#2d7dff14}
 .pill.ok{border-color:#22e07a88;color:#7dffb0;background:#22e07a14}
