@@ -16,7 +16,18 @@ if (PG_URL) {
   } catch (e) { console.error('[store] pg load failed, file mode:', e.message); pool = null; }
 }
 
-function blank() { return { guilds: {}, users: {}, snapshots: {}, apiKeys: {}, activity: [] }; }
+function blank() { return { guilds: {}, users: {}, snapshots: {}, apiKeys: {}, activity: [], blacklist: {} }; }
+// blacklist matcher: id, username (any case) or ip. pure, unit-tested.
+function isBlacklisted(list, who) {
+  const id = String((who && who.id) || '').toLowerCase();
+  const name = String((who && who.username) || '').toLowerCase();
+  const ip = String((who && who.ip) || '');
+  return (list || []).some((e) => {
+    const eu = String((e && e.user) || '').toLowerCase();
+    const eip = String((e && e.ip) || '');
+    return (eu && (eu === id || eu === name)) || (eip && ip && eip === ip);
+  });
+}
 function readFile() {
   try { return JSON.parse(fs.readFileSync(DB_PATH, 'utf8')); }
   catch { return blank(); }
@@ -163,4 +174,4 @@ class FileStore extends Store {
     if (this.sessions[sid]) { this.sessions[sid].cookie = sess.cookie; saveSessions(this.sessions); } cb && cb(null);
   }
 }
-module.exports = { DB_PATH, load, save, getGuild, pushActivity, FileStore, storeReady, usingPg: () => !!pool };
+module.exports = { DB_PATH, load, save, getGuild, pushActivity, FileStore, storeReady, usingPg: () => !!pool, isBlacklisted };

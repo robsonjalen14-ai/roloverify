@@ -1,0 +1,65 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Blacklist — Rolo Verify</title><link rel="stylesheet" href="/style.css"><link rel="icon" href="/logo.png"></head><body>
+<div class="nav"><div class="brand"><img src="/logo.png" alt="Rolo Verify logo" class="logo" onerror="this.outerHTML='🥔'"> Rolo <span>Verify</span> — Blacklist</div><div><a class="btn ghost" href="/dashboard.html">Dashboard</a> <a class="btn ghost" href="/members.html">Members</a> <a class="btn ghost" href="/">Home</a></div></div>
+<div class="wrap" style="max-width:900px">
+<div class="banner" id="banner"></div>
+<label for="guild">Server</label><select id="guild"></select>
+<div class="card"><h3>Banned users</h3>
+<p class="muted">Matching members get stopped at verify — by user id, name, or ip. Banned never verify, never store.</p>
+<div class="row"><div><label for="bUser">User id or name</label><input id="bUser" maxlength="64" placeholder="123… or SomeName"></div><div><label for="bIp">IP address</label><input id="bIp" maxlength="64" placeholder="1.2.3.4"></div></div>
+<button class="btn" id="bAdd" style="margin-top:12px">Ban</button>
+<div class="tablewrap"><table style="margin-top:12px"><thead><tr><th>User</th><th>IP</th><th>Added</th><th>By</th><th></th></tr></thead><tbody id="rows"><tr><td colspan="5" class="muted">Loading…</td></tr></tbody></table></div>
+</div></div>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+let GID = null;
+function banner(msg, bad) {
+  const b = $('banner');
+  b.textContent = msg; b.classList.add('show'); b.classList.toggle('error', !!bad);
+}
+async function j(url, opts) {
+  const r = await fetch(url, opts);
+  const t = await r.text();
+  let d = null; try { d = JSON.parse(t); } catch {}
+  if (!r.ok) throw new Error((d && d.error) || t || ('failed (' + r.status + ')'));
+  return d;
+}
+function paint(list) {
+  $('rows').innerHTML = list.length ? list.map(e => `<tr><td>${esc(e.user) || '—'}</td><td><code>${esc(e.ip) || '—'}</code></td><td>${new Date(e.at).toLocaleString()}</td><td>${esc(e.by) || '—'}</td><td><button class="btn ghost" data-id="${e.id}">Unban</button></td></tr>`).join('') : '<tr><td colspan="5" class="muted">Nobody banned.</td></tr>';
+  [...document.querySelectorAll('button[data-id]')].forEach(b => b.onclick = async () => {
+    try { await j(`/api/guild/${GID}/blacklist/${b.dataset.id}`, { method: 'DELETE' }); load(); }
+    catch (e) { banner('Unban failed: ' + e.message, true); }
+  });
+}
+async function load() {
+  if (!GID) return;
+  try {
+    const r = await j(`/api/guild/${GID}/blacklist`);
+    paint(r.blacklist);
+  } catch (e) {
+    if (/login required|401/.test(e.message)) { location.href = '/auth/discord'; return; }
+    banner('Could not load blacklist: ' + e.message, true);
+  }
+}
+$('bAdd').onclick = async () => {
+  try {
+    await j(`/api/guild/${GID}/blacklist`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user: $('bUser').value, ip: $('bIp').value }) });
+    $('bUser').value = ''; $('bIp').value = '';
+    banner('Banned. They stop at verify from now on.');
+    load();
+  } catch (e) { banner('Ban failed: ' + e.message, true); }
+};
+(async () => {
+  try { await j('/api/me'); } catch { location.href = '/auth/discord'; return; }
+  try {
+    const g = await j('/api/my-guilds');
+    if (!g.guilds.length) { banner('No servers found.', true); return; }
+    $('guild').innerHTML = g.guilds.map(x => `<option value="${x.id}"></option>`).join('');
+    [...$('guild').options].forEach((o, i) => { o.textContent = g.guilds[i].name; });
+    GID = $('guild').value;
+    $('guild').onchange = () => { GID = $('guild').value; load(); };
+    load();
+  } catch (e) { banner('Could not load your servers: ' + e.message, true); }
+})();
+</script></body></html>

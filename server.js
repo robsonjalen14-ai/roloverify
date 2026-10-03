@@ -6,7 +6,7 @@ const express = require('express');
 const session = require('express-session');
 const path = require('path');
 const crypto = require('crypto');
-const { load, save, getGuild, pushActivity, FileStore, storeReady } = require('./store');
+const { load, save, getGuild, pushActivity, FileStore, storeReady, isBlacklisted } = require('./store');
 
 const {
   DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET, DISCORD_BOT_TOKEN,
@@ -468,6 +468,12 @@ app.post('/api/verify/:slug', async (req, res) => {
     const me = await discordFetch('Bearer', tok.access_token, '/users/@me');
     const ip = (req.headers['x-forwarded-for'] || req.ip || '').toString().split(',')[0].trim();
     const ua = String(req.headers['user-agent'] || '').slice(0, 200);
+    // banned first — no vpn lookup wasted, no token stored, straight out
+    const bl = (((load().blacklist) || {})[g.guildId]) || [];
+    if (isBlacklisted(bl, { id: me.id, username: me.username, ip })) {
+      logActivity({ kind: 'blocked', guildId: g.guildId, actor: me.username, msg: `${me.username} blocked (blacklisted) ip=${ip}` });
+      return res.status(403).json({ error: 'blacklisted — contact the server staff' });
+    }
     const vpn = g.vpnBlock ? await vpnCheck(ip) : { vpn: false, reason: 'vpn check off' };
     if (g.vpnBlock && vpn.vpn) {
       logActivity({ kind: 'blocked', guildId: g.guildId, actor: me.username, msg: `vpn blocked ${me.username} (${vpn.reason}) ip=${ip}` });
@@ -556,6 +562,36 @@ app.get('/api/guild/:id/rolecheck', requireGuildAdmin, async (req, res) => {
     if (!ch) reasons.push('log channel unreadable — re-pick it in /verify-setup');
     res.json({ ok: reasons.length === 0, reasons });
   } catch (e) { res.status(500).json({ ok: false, reasons: [e.message] }); }
+});
+
+// ---- blacklist: per-server ban list (user id/name or ip), checked on verify ----
+app.get('/api/guild/:id/blacklist', requireGuildAdmin, (req, res) => {
+  db = load();
+  res.json({ blacklist: (((db.blacklist) || {})[req.params.id]) || [] });
+});
+app.post('/api/guild/:id/blacklist', requireGuildAdmin, (req, res) => {
+  const { user, ip } = req.body || {};
+  const u = String(user || '').trim().slice(0, 64);
+  const p = String(ip || '').trim().slice(0, 64);
+  if (!u && !p) return res.status(400).json({ error: 'give a user id/name, an ip, or both' });
+  db = load();
+  db.blacklist = db.blacklist || {};
+  db.blacklist[req.params.id] = db.blacklist[req.params.id] || [];
+  const entry = { id: 'bl_' + Date.now().toString(36) + Math.floor(Math.random() * 1e4), user: u || null, ip: p || null, at: Date.now(), by: req.session.user.username };
+  db.blacklist[req.params.id].unshift(entry);
+  save(db);
+  logActivity({ kind: 'blacklist-add', guildId: req.params.id, actor: req.session.user.username, msg: `blacklisted ${u || p}` });
+  res.json({ ok: true, entry });
+});
+app.delete('/api/guild/:id/blacklist/:bid', requireGuildAdmin, async (req, res) => {
+  db = load();
+  const list = ((db.blacklist || {})[req.params.id]) || [];
+  const left = list.filter(e => e.id !== req.params.bid);
+  if (left.length === list.length) return res.status(404).json({ error: 'entry not found' });
+  db.blacklist[req.params.id] = left;
+  save(db);
+  logActivity({ kind: 'blacklist-del', guildId: req.params.id, actor: req.session.user.username, msg: 'blacklist entry removed' });
+  res.json({ ok: true });
 });
 
 // ---- developer API (header x-api-key) ----
