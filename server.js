@@ -88,7 +88,10 @@ async function myGuilds(req) {
     throw e;
   }
 }
-function adminOnly(guilds) { return guilds.filter(g => { try { return (BigInt(g.permissions) & 0x20n) !== 0n; } catch { return false; } }); }
+// manager = admin bit OR guild-owner flag. owners rule their servers without
+// needing Manage Server ticked — discord says so right on the guild (owner:true).
+function canManage(g) { try { if (g.owner === true) return true; const p = BigInt(g.permissions); return (p & 0x20n) !== 0n || (p & 0x8n) !== 0n; } catch { return false; } }
+function adminOnly(guilds) { return guilds.filter(canManage); }
 async function requireGuildAdmin(req, res, next) {
   if (!req.session.user) return res.status(401).json({ error: 'login required' });
   try {
@@ -526,4 +529,4 @@ app.get('/pricing.html', (req, res) => res.sendFile(path.join(__dirname, 'public
 // local test probe — no auth, proves localhost is up
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'roloverify-local', base: BASE_URL, testMode: TEST_MODE, commit: process.env.RENDER_GIT_COMMIT || 'local', ts: Date.now() }));
 app.listen(PORT, () => console.log(`roloverify local on ${BASE_URL}${TEST_MODE ? ' (test mode: demo login on)' : ''}`));
-module.exports = { app, logActivity, ageText, decodeBadges, parseUA, pickGeo };
+module.exports = { app, logActivity, ageText, decodeBadges, parseUA, pickGeo, canManage };
