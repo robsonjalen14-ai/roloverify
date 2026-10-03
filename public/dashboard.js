@@ -1,6 +1,16 @@
 // dashboard brain — plain english, every button answers back
 const $ = (id) => document.getElementById(id);
-let GID = null, ES = null;
+let GID = null, ES = null, GUILDS = [];
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function iconFor(x) { return x.icon ? `https://cdn.discord.com/icons/${x.id}/${x.icon}.png` : null; }
+function badgeFor(x) { if (x.botOnly) return 'bot'; if (x.owner) return 'owner'; return 'admin'; }
+function paintServers() {
+  $('guildList').innerHTML = GUILDS.map((x) => {
+    const ic = iconFor(x);
+    return `<button class="srv${x.id === GID ? ' active' : ''}" data-id="${x.id}"><span class="srv-ic">${ic ? `<img src="${ic}" alt="" loading="lazy" onerror="this.remove()">` : esc(x.name.charAt(0).toUpperCase())}</span><span class="srv-name">${esc(x.name)}</span><span class="pill">${badgeFor(x)}</span></button>`;
+  }).join('') || '<div class="muted">No servers.</div>';
+  [...document.querySelectorAll('.srv')].forEach((b) => { b.onclick = () => { GID = b.dataset.id; paintServers(); load(); }; });
+}
 
 function banner(msg, isError) {
   const b = $('banner');
@@ -29,16 +39,12 @@ async function boot() {
   }
   try {
     const g = await j('/api/my-guilds');
-    const sel = $('guild');
-    if (!g.guilds || !g.guilds.length) {
-      sel.innerHTML = '<option value="">No servers found</option>';
+    if (!g.guilds.length) {
       banner('No servers found. Invite the bot to your server first, then refresh.', true);
       return;
     }
-    sel.innerHTML = g.guilds.map(x => `<option value="${x.id}"></option>`).join('');
-    [...sel.options].forEach((o, i) => { o.textContent = g.guilds[i].name; });
-    GID = sel.value;
-    sel.onchange = () => { GID = sel.value; load(); };
+    GUILDS = g.guilds; GID = g.guilds[0].id;
+    paintServers();
     load();
   } catch (e) { banner('Could not load your servers: ' + e.message, true); }
 }
