@@ -1,6 +1,10 @@
 # Rolo Verify — one-click hosting on Render (render.com, free tier works)
 # single Web Service runs BOTH the site and the discord bot (see Dockerfile CMD).
+# free Postgres below keeps configs, members, snapshots and logins across deploys.
 # create it via: Render → New → Blueprint → pick this repo. nothing else to create.
+databases:
+  - name: roloverify-db
+    plan: free
 services:
   - type: web
     name: roloverify
@@ -19,3 +23,7 @@ services:
         sync: false # https://YOUR-URL.onrender.com/auth/discord/callback
       - key: SESSION_SECRET
         generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: roloverify-db
+          property: connectionString

@@ -6,7 +6,7 @@ const express = require('express');
 const session = require('express-session');
 const path = require('path');
 const crypto = require('crypto');
-const { load, save, getGuild, pushActivity, FileStore } = require('./store');
+const { load, save, getGuild, pushActivity, FileStore, storeReady } = require('./store');
 
 const {
   DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET, DISCORD_BOT_TOKEN,
@@ -549,5 +549,8 @@ app.get('/api/health', (req, res) => {
   let odb = null; try { odb = load(); } catch { odb = null; }
   res.json({ ok: true, app: 'roloverify-local', base: BASE_URL, testMode: TEST_MODE, commit: process.env.RENDER_GIT_COMMIT || 'local', ownerSet: !!(OWNER_ID || (odb && odb.ownerId)), botServers: (odb && odb.botGuilds && odb.botGuilds.length) || 0, ts: Date.now() });
 });
-app.listen(PORT, () => console.log(`roloverify local on ${BASE_URL}${TEST_MODE ? ' (test mode: demo login on)' : ''}`));
+// store first (postgres on hosting), traffic second — routes read memory
+storeReady()
+  .then(() => app.listen(PORT, () => console.log(`roloverify local on ${BASE_URL}${TEST_MODE ? ' (test mode: demo login on)' : ''}`)))
+  .catch((e) => { console.error('store boot failed:', e.message); process.exit(1); });
 module.exports = { app, logActivity, ageText, decodeBadges, parseUA, pickGeo, canManage };

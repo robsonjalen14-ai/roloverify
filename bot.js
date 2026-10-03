@@ -2,7 +2,7 @@
 // *GatewayIntentBits.GuildMembers privileged — flip it on in dev portal or guildMemberAdd never fires*
 require('dotenv').config();
 const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, REST, Routes, SlashCommandBuilder, ActivityType } = require('discord.js');
-const { load, save, getGuild, pushActivity } = require('./store');
+const { load, save, getGuild, pushActivity, storeReady } = require('./store');
 
 const TOKEN = process.env.DISCORD_BOT_TOKEN;
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
@@ -113,4 +113,7 @@ client.on('guildMemberAdd', async (m) => {
   } catch (e) { console.error('memberAdd fail', e.message); }
 });
 
-client.login(TOKEN);
+// store first so guild syncs land in the real db, gateway second
+storeReady()
+  .then(() => client.login(TOKEN))
+  .catch((e) => { console.error('store boot failed:', e.message); process.exit(1); });
