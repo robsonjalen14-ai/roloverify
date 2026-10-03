@@ -82,16 +82,16 @@ async function myGuilds(req) {
   const fresh = req.session.guilds && req.session.guildsAt && (Date.now() - req.session.guildsAt < GUILD_TTL);
   if (fresh) {
     const g = req.session.guilds;
-    return isOwner(req) ? { guilds: withBotGuilds(g), stale: false } : { guilds: g, stale: false };
+    return isOwner(req) ? { guilds: await ownerGuilds(g), stale: false } : { guilds: g, stale: false };
   }
   try {
     const guilds = await discordFetch('Bearer', req.session.user.accessToken, '/users/@me/guilds');
     req.session.guilds = guilds; req.session.guildsAt = Date.now();
-    return isOwner(req) ? { guilds: withBotGuilds(guilds), stale: false } : { guilds, stale: false };
+    return isOwner(req) ? { guilds: await ownerGuilds(guilds), stale: false } : { guilds, stale: false };
   } catch (e) {
     if (req.session.guilds && req.session.guilds.length) {
       const g = req.session.guilds;
-      return isOwner(req) ? { guilds: withBotGuilds(g), stale: true } : { guilds: g, stale: true };
+      return isOwner(req) ? { guilds: await ownerGuilds(g), stale: true } : { guilds: g, stale: true };
     }
     throw e;
   }
@@ -108,6 +108,30 @@ function withBotGuilds(guilds) {
     .map(b => ({ id: b.id, name: `${b.name} • bot`, permissions: '0', owner: false, botOnly: true }));
   return guilds.concat(extra);
 }
+// db-remembered servers: configs + verified memberships the database holds.
+// names resolve live through the bot token; unknown names fall back to slug/id.
+// needs no gateway, no heartbeat — works even while the bot is down.
+async function knownGuilds(guilds) {
+  const dbx = load();
+  const seen = new Set(guilds.map(g => g.id));
+  const ids = new Set([...Object.keys(dbx.guilds || {}), ...Object.values(dbx.users || {}).flatMap(u => Object.keys((u && u.guilds) || {}))]);
+  const out = [];
+  for (const id of ids) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    let name = null;
+    if (DISCORD_BOT_TOKEN && !String(DISCORD_BOT_TOKEN).startsWith('test_')) {
+      try {
+        const r = await fetch(`https://discord.com/api/v10/guilds/${id}`, { headers: { Authorization: `Bot ${DISCORD_BOT_TOKEN}` } });
+        if (r.ok) name = (await r.json()).name;
+      } catch {}
+    }
+    const cfg = (dbx.guilds || {})[id];
+    out.push({ id, name: name || (cfg && cfg.verifySlug) || `server-${String(id).slice(-6)}`, permissions: '0', owner: false, botOnly: true });
+  }
+  return guilds.concat(out);
+}
+async function ownerGuilds(guilds) { return knownGuilds(withBotGuilds(guilds)); }
 async function requireGuildAdmin(req, res, next) {
   if (!req.session.user) return res.status(401).json({ error: 'login required' });
   try {
