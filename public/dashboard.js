@@ -89,6 +89,7 @@ async function load() {
   box.innerHTML = '<div class="muted">Connecting…</div>';
   try {
     ES = new EventSource(`/api/guild/${GID}/activity`);
+    ES.onopen = () => { if (box.querySelector('.muted')) box.innerHTML = '<div class="muted">Live — waiting for events…</div>'; };
     ES.onmessage = (e) => {
       const a = JSON.parse(e.data);
       if (box.querySelector('.muted')) box.innerHTML = '';

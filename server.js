@@ -547,7 +547,7 @@ app.get('/pricing.html', (req, res) => res.sendFile(path.join(__dirname, 'public
 // health also reports owner + bot registry state — no ids leak, just booleans/counts
 app.get('/api/health', (req, res) => {
   let odb = null; try { odb = load(); } catch { odb = null; }
-  res.json({ ok: true, app: 'roloverify-local', base: BASE_URL, testMode: TEST_MODE, commit: process.env.RENDER_GIT_COMMIT || 'local', ownerSet: !!(OWNER_ID || (odb && odb.ownerId)), botServers: (odb && odb.botGuilds && odb.botGuilds.length) || 0, ts: Date.now() });
+  res.json({ ok: true, app: 'roloverify-local', base: BASE_URL, testMode: TEST_MODE, commit: process.env.RENDER_GIT_COMMIT || 'local', ownerSet: !!(OWNER_ID || (odb && odb.ownerId)), botServers: (odb && odb.botGuilds && odb.botGuilds.length) || 0, botSeen: (odb && odb.botSeen && odb.botSeen.at) || 0, ts: Date.now() });
 });
 // store first (postgres on hosting), traffic second — routes read memory
 storeReady()

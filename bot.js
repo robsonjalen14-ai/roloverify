@@ -22,12 +22,21 @@ function syncGuilds() {
     save(db);
   } catch {}
 }
+// heartbeat: proves the bot process is alive + connected, dashboard reads it
+function beat() {
+  try {
+    const db = load();
+    db.botSeen = { at: Date.now(), tag: client.user ? client.user.tag : null, guilds: client.guilds ? client.guilds.cache.size : 0 };
+    save(db);
+  } catch {}
+}
+setInterval(() => { syncGuilds(); beat(); }, 60000);
 
 client.once('ready', async () => {
   console.log('> rolo-verify v1.0\n> connecting to discord...\n> logged in as ' + client.user.tag + '\n> watching for new members...\n> verification enabled.\n> ready.');
   client.user.setPresence({ activities: [{ name: 'Rolo Verify', type: ActivityType.Playing }], status: 'dnd' });
   console.log('> status: dnd, playing Rolo Verify');
-  syncGuilds();
+  syncGuilds(); beat();
   const cmds = [
     new SlashCommandBuilder().setName('verify-setup').setDescription('post the verify embed here')
       .addRoleOption(o => o.setName('role').setDescription('role members get after verifying').setRequired(true))
