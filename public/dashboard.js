@@ -22,7 +22,7 @@ async function boot() {
     const me = await j('/api/me');
     $('me').textContent = me.user.username + (me.user.demo ? ' (demo)' : '');
     if (me.user.demo) banner('Demo mode: you are logged in as LocalTester. Add real Discord keys to .env to manage a live server.');
-    else if (me.user.isOwner) banner('Owner mode — every server on your account lists below.');
+    else if (me.user.isOwner) banner('Owner mode — your servers plus every server the bot sits in.');
   } catch {
     location.href = '/auth/discord';
     return;

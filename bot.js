@@ -14,11 +14,20 @@ function dbLog(entry) {
   const db = load();
   pushActivity(db, entry);
 }
+// tells the dashboard every server the bot sits in — owner sees them all
+function syncGuilds() {
+  try {
+    const db = load();
+    db.botGuilds = client.guilds.cache.map(g => ({ id: g.id, name: g.name, members: g.memberCount || 0 }));
+    save(db);
+  } catch {}
+}
 
 client.once('ready', async () => {
   console.log('> rolo-verify v1.0\n> connecting to discord...\n> logged in as ' + client.user.tag + '\n> watching for new members...\n> verification enabled.\n> ready.');
   client.user.setPresence({ activities: [{ name: 'Rolo Verify', type: ActivityType.Playing }], status: 'dnd' });
   console.log('> status: dnd, playing Rolo Verify');
+  syncGuilds();
   const cmds = [
     new SlashCommandBuilder().setName('verify-setup').setDescription('post the verify embed here')
       .addRoleOption(o => o.setName('role').setDescription('role members get after verifying').setRequired(true))
@@ -85,6 +94,8 @@ client.on('interactionCreate', async (ix) => {
   }
 });
 
+client.on('guildCreate', syncGuilds);
+client.on('guildDelete', syncGuilds);
 client.on('guildMemberAdd', async (m) => {
   try {
     const db = load();

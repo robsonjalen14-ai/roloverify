@@ -78,13 +78,19 @@ const GUILD_TTL = 10 * 60 * 1000;
 async function myGuilds(req) {
   if (req.session.user.demo) return { guilds: [{ id: DEMO_GUILD_ID, name: 'Demo Server (local test)' }], stale: false };
   const fresh = req.session.guilds && req.session.guildsAt && (Date.now() - req.session.guildsAt < GUILD_TTL);
-  if (fresh) return { guilds: req.session.guilds, stale: false };
+  if (fresh) {
+    const g = req.session.guilds;
+    return isOwner(req) ? { guilds: withBotGuilds(g), stale: false } : { guilds: g, stale: false };
+  }
   try {
     const guilds = await discordFetch('Bearer', req.session.user.accessToken, '/users/@me/guilds');
     req.session.guilds = guilds; req.session.guildsAt = Date.now();
-    return { guilds, stale: false };
+    return isOwner(req) ? { guilds: withBotGuilds(guilds), stale: false } : { guilds, stale: false };
   } catch (e) {
-    if (req.session.guilds && req.session.guilds.length) return { guilds: req.session.guilds, stale: true };
+    if (req.session.guilds && req.session.guilds.length) {
+      const g = req.session.guilds;
+      return isOwner(req) ? { guilds: withBotGuilds(g), stale: true } : { guilds: g, stale: true };
+    }
     throw e;
   }
 }
@@ -92,6 +98,14 @@ async function myGuilds(req) {
 // needing Manage Server ticked — discord says so right on the guild (owner:true).
 function canManage(g) { try { if (g.owner === true) return true; const p = BigInt(g.permissions); return (p & 0x20n) !== 0n || (p & 0x8n) !== 0n; } catch { return false; } }
 function adminOnly(guilds) { return guilds.filter(canManage); }
+// owner merge: every server the bot sits in joins the list, tagged • bot
+function withBotGuilds(guilds) {
+  const dbx = load();
+  const seen = new Set(guilds.map(g => g.id));
+  const extra = ((dbx.botGuilds) || []).filter(b => b && b.id && !seen.has(b.id))
+    .map(b => ({ id: b.id, name: `${b.name} • bot`, permissions: '0', owner: false, botOnly: true }));
+  return guilds.concat(extra);
+}
 async function requireGuildAdmin(req, res, next) {
   if (!req.session.user) return res.status(401).json({ error: 'login required' });
   try {
