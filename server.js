@@ -544,6 +544,10 @@ app.get('/api/v1/:guildId/members', (req, res) => {
 
 app.get('/pricing.html', (req, res) => res.sendFile(path.join(__dirname, 'public', 'pricing.html')));
 // local test probe — no auth, proves localhost is up
-app.get('/api/health', (req, res) => res.json({ ok: true, app: 'roloverify-local', base: BASE_URL, testMode: TEST_MODE, commit: process.env.RENDER_GIT_COMMIT || 'local', ts: Date.now() }));
+// health also reports owner + bot registry state — no ids leak, just booleans/counts
+app.get('/api/health', (req, res) => {
+  let odb = null; try { odb = load(); } catch { odb = null; }
+  res.json({ ok: true, app: 'roloverify-local', base: BASE_URL, testMode: TEST_MODE, commit: process.env.RENDER_GIT_COMMIT || 'local', ownerSet: !!(OWNER_ID || (odb && odb.ownerId)), botServers: (odb && odb.botGuilds && odb.botGuilds.length) || 0, ts: Date.now() });
+});
 app.listen(PORT, () => console.log(`roloverify local on ${BASE_URL}${TEST_MODE ? ' (test mode: demo login on)' : ''}`));
 module.exports = { app, logActivity, ageText, decodeBadges, parseUA, pickGeo, canManage };
