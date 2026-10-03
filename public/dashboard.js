@@ -37,6 +37,13 @@ async function boot() {
     location.href = '/auth/discord';
     return;
   }
+  // bot watchdog: silent bot means no bot servers in the picker — say so here
+  try {
+    const h = await j('/api/health');
+    const age = h.botSeen ? Math.round((Date.now() - h.botSeen) / 1000) : -1;
+    if (age === -1) banner('Bot never connected — check the bot token and restart it. Its servers cannot list until it phones home.', true);
+    else if (age > 300) banner(`Bot silent ${Math.round(age / 60)}m — restart it so its servers list here.`, true);
+  } catch {}
   try {
     const g = await j('/api/my-guilds');
     if (!g.guilds.length) {
