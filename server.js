@@ -31,7 +31,7 @@ const TEST_MODE = !DISCORD_CLIENT_ID || DISCORD_CLIENT_ID.startsWith('test_');
 const DEMO_GUILD_ID = '111111111111111111';
 // owner override: this discord user id sees EVERY server on their account,
 // admin or not. set OWNER_ID in env. everyone else keeps the admin gate.
-const OWNER_ID = process.env.OWNER_ID || '';
+const OWNER_ID = String(process.env.OWNER_ID || '').trim();
 // verify ping: this user gets @mentioned on every log card. blank = silent.
 const PING_USER_ID = process.env.PING_USER_ID || '';
 function isOwner(req) { return !!OWNER_ID && !!req.session.user && req.session.user.id === OWNER_ID; }
@@ -276,7 +276,7 @@ app.get('/auth/discord/callback', async (req, res) => {
 });
 app.get('/api/me', (req, res) => {
   if (!req.session.user) return res.status(401).json({ error: 'no session' });
-  res.json({ user: { id: req.session.user.id, username: req.session.user.username, avatar: req.session.user.avatar, demo: !!req.session.user.demo } });
+  res.json({ user: { id: req.session.user.id, username: req.session.user.username, avatar: req.session.user.avatar, demo: !!req.session.user.demo, isOwner: isOwner(req) } });
 });
 app.post('/logout', (req, res) => req.session.destroy(() => res.json({ ok: true })));
 

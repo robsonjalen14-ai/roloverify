@@ -22,6 +22,7 @@ async function boot() {
     const me = await j('/api/me');
     $('me').textContent = me.user.username + (me.user.demo ? ' (demo)' : '');
     if (me.user.demo) banner('Demo mode: you are logged in as LocalTester. Add real Discord keys to .env to manage a live server.');
+    else if (me.user.isOwner) banner('Owner mode — every server on your account lists below.');
   } catch {
     location.href = '/auth/discord';
     return;
@@ -58,6 +59,12 @@ async function load() {
     $('eBtn').value = c.config.embed.buttonLabel;
     $('vurl').href = $('vurl').textContent = `/v/${c.config.verifySlug}`;
     const s = await j(`/api/guild/${GID}/snapshots`);
+    $('statSnaps').textContent = s.snapshots.length;
+    $('statProt').textContent = (c.config.vpnBlock && c.config.altDetection) ? 'ON' : 'PARTIAL';
+    try {
+      const mm = await j(`/api/guild/${GID}/members`);
+      $('statMembers').textContent = mm.count;
+    } catch { $('statMembers').textContent = '–'; }
     $('snaps').innerHTML = s.snapshots.length
       ? s.snapshots.map(x => `<div>${x.id} — ${x.members.length} members — ${new Date(x.at).toLocaleString()} by ${x.by}</div>`).join('')
       : 'No snapshots yet. Take one above.';

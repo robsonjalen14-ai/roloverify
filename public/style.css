@@ -83,6 +83,9 @@ footer{color:var(--dim);text-align:center;padding:30px}
 .sidebar nav a{display:block;padding:10px 12px;border-radius:10px;color:var(--dim);text-decoration:none;margin:4px 0;border:1px solid transparent}
 .sidebar nav a:hover{background:#2d7dff18;color:var(--txt);border-color:#2d7dff44}
 .side-foot{margin-top:22px;padding-top:14px;border-top:1px solid var(--line)}
+.grid.stats{grid-template-columns:repeat(3,1fr);margin:0 0 14px}
+.card.stat{text-align:center;margin-bottom:0}
+.stat-num{font-size:34px;font-weight:900;color:var(--blue-ice)}
 .main{padding:26px;max-width:920px}
 @media(max-width:800px){.app{grid-template-columns:1fr}.sidebar{position:static;min-height:auto}}
 footer::before{content:"";display:block;height:1px;max-width:1080px;margin:0 auto 30px;
