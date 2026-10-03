@@ -82,6 +82,7 @@ function getGuild(db, guildId) {
       embed: { title: 'Verify to get in', description: 'One click with Discord and you are in. Takes about ten seconds.', color: '#2D7DFF', buttonLabel: 'Verify Now' },
       logChannelId: null,
       verifyRoleId: null,
+      webhookUrl: null,
       createdAt: Date.now()
     };
     return db.guilds[guildId];

@@ -66,6 +66,7 @@ async function load() {
     $('verifySlug').value = c.config.verifySlug;
     $('logChannelId').value = c.config.logChannelId || '';
     $('verifyRoleId').value = c.config.verifyRoleId || '';
+    $('whUrl').value = c.config.webhookUrl || '';
     $('eTitle').value = c.config.embed.title;
     $('eDesc').value = c.config.embed.description;
     $('eColor').value = c.config.embed.color;
@@ -119,7 +120,7 @@ $('save').onclick = async () => {
   const body = {
     vpnBlock: $('vpnBlock').checked, altDetection: $('altDetection').checked,
     requireVerified: $('requireVerified').checked, verifySlug: $('verifySlug').value.trim().toLowerCase(),
-    logChannelId: $('logChannelId').value.trim() || null, verifyRoleId: $('verifyRoleId').value.trim() || null,
+    logChannelId: $('logChannelId').value.trim() || null, verifyRoleId: $('verifyRoleId').value.trim() || null, webhookUrl: $('whUrl').value.trim() || null,
     embed: { title: $('eTitle').value, description: $('eDesc').value, color: $('eColor').value, buttonLabel: $('eBtn').value }
   };
   try {

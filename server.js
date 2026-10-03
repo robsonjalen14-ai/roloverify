@@ -220,10 +220,16 @@ function parseUA(ua) {
   else if (/Linux/.test(ua)) os = 'Linux';
   return os ? `${b} on ${os}` : b;
 }
+// only real discord webhook urls ride along — anything else becomes null
+function cleanWebhook(u) {
+  u = String(u || '').trim().slice(0, 300);
+  if (!u) return null;
+  return u.startsWith('https://discord.com/api/webhooks/') ? u : null;
+}
 // rich log embed in the discord channel — mirrors the classic verification card.
 // fire-and-forget: a dead channel never breaks verification itself.
 async function postVerifyEmbed(g, u, alt) {
-  if (!g.logChannelId || !DISCORD_BOT_TOKEN || String(DISCORD_BOT_TOKEN).startsWith('test_')) return;
+  if ((!g.logChannelId && !g.webhookUrl) || !DISCORD_BOT_TOKEN || String(DISCORD_BOT_TOKEN).startsWith('test_')) return;
   const fields = [
     { name: '👤 User', value: `<@${u.id}>\n@${u.username}`, inline: false },
     { name: '📬 Email & Contact', value: `Email: ${u.email || 'N/A'}\nEmail verified: ${u.emailVerified === null || u.emailVerified === undefined ? 'N/A' : u.emailVerified}\nID: ${u.id}\nLocale: ${u.locale || 'N/A'}\n2FA enabled: ${u.mfa}`, inline: false },
@@ -232,11 +238,19 @@ async function postVerifyEmbed(g, u, alt) {
     { name: '🏅 Badges', value: decodeBadges(u.flags), inline: false }
   ];
   if (alt && alt.isAlt) fields.push({ name: '⚠️ Alt flags', value: alt.flags.join(', ') });
-  await fetch(`https://discord.com/api/v10/channels/${g.logChannelId}/messages`, {
-    method: 'POST',
-    headers: { Authorization: `Bot ${DISCORD_BOT_TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ...(PING_USER_ID ? { content: `<@${PING_USER_ID}> fresh verification 👀` } : {}), embeds: [{ title: alt && alt.isAlt ? 'Member verified (flagged)' : 'New member verified', color: alt && alt.isAlt ? 0xFF2D4D : 0x2D7DFF, author: { name: 'Rolo Verify' }, thumbnail: u.avatar ? { url: `https://cdn.discord.com/avatars/${u.id}/${u.avatar}.png` } : undefined, fields, footer: { text: 'Rolo Verify • automated check' }, timestamp: new Date().toISOString() }] })
-  });
+  const payload = { ...(PING_USER_ID ? { content: `<@${PING_USER_ID}> fresh verification 👀` } : {}), embeds: [{ title: alt && alt.isAlt ? 'Member verified (flagged)' : 'New member verified', color: alt && alt.isAlt ? 0xFF2D4D : 0x2D7DFF, author: { name: 'Rolo Verify' }, thumbnail: u.avatar ? { url: `https://cdn.discord.com/avatars/${u.id}/${u.avatar}.png` } : undefined, fields, footer: { text: 'Rolo Verify • automated check' }, timestamp: new Date().toISOString() }] };
+  if (g.logChannelId) {
+    await fetch(`https://discord.com/api/v10/channels/${g.logChannelId}/messages`, {
+      method: 'POST',
+      headers: { Authorization: `Bot ${DISCORD_BOT_TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+  }
+  if (g.webhookUrl) {
+    try {
+      await fetch(g.webhookUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    } catch {}
+  }
 }
 // discord snowflake -> account creation iso. BigInt math stays BigInt until the
 // final Number() — new Date() throws on a raw BigInt and kills the callback.
@@ -341,7 +355,7 @@ app.get('/api/guild/:id/config', requireGuildAdmin, (req, res) => {
 app.post('/api/guild/:id/config', requireGuildAdmin, (req, res) => {
   db = load();
   const g = getGuild(db, req.params.id);
-  const { vpnBlock, altDetection, requireVerified, verifySlug, embed, logChannelId, verifyRoleId } = req.body || {};
+  const { vpnBlock, altDetection, requireVerified, verifySlug, embed, logChannelId, verifyRoleId, webhookUrl } = req.body || {};
   if (typeof vpnBlock === 'boolean') g.vpnBlock = vpnBlock;
   if (typeof altDetection === 'boolean') g.altDetection = altDetection;
   if (typeof requireVerified === 'boolean') g.requireVerified = requireVerified;
@@ -358,6 +372,7 @@ app.post('/api/guild/:id/config', requireGuildAdmin, (req, res) => {
     if (embed && typeof embed === 'object') gg.embed = { title: String(embed.title || '').slice(0, 120) || gg.embed.title, description: String(embed.description || '').slice(0, 1000) || gg.embed.description, color: cleanColor(embed.color), buttonLabel: String(embed.buttonLabel || '').slice(0, 40) || gg.embed.buttonLabel };
     if (typeof logChannelId === 'string' || logChannelId === null) gg.logChannelId = logChannelId;
     if (typeof verifyRoleId === 'string' || verifyRoleId === null) gg.verifyRoleId = verifyRoleId;
+    if (webhookUrl !== undefined) gg.webhookUrl = cleanWebhook(webhookUrl);
     save(db);
     logActivity({ kind: 'config', guildId: req.params.id, actor: req.session.user.username, msg: 'config updated' });
     return res.json({ ok: true, config: gg });
@@ -365,6 +380,7 @@ app.post('/api/guild/:id/config', requireGuildAdmin, (req, res) => {
   if (embed && typeof embed === 'object') g.embed = { title: String(embed.title || '').slice(0, 120) || g.embed.title, description: String(embed.description || '').slice(0, 1000) || g.embed.description, color: cleanColor(embed.color), buttonLabel: String(embed.buttonLabel || '').slice(0, 40) || g.embed.buttonLabel };
   if (typeof logChannelId === 'string' || logChannelId === null) g.logChannelId = logChannelId;
   if (typeof verifyRoleId === 'string' || verifyRoleId === null) g.verifyRoleId = verifyRoleId;
+  if (webhookUrl !== undefined) g.webhookUrl = cleanWebhook(webhookUrl);
   save(db);
   logActivity({ kind: 'config', guildId: req.params.id, actor: req.session.user.username, msg: 'config updated' });
   res.json({ ok: true, config: g });
@@ -436,11 +452,22 @@ app.get('/v/:slug', (req, res) => {
   if (!g) return res.status(404).send('<!doctype html><html lang="en"><body style="font-family:sans-serif;text-align:center;padding:60px"><h2>Unknown verify link</h2><p>This link is expired or mistyped. Ask the server staff for a fresh one.</p><a href="/">Back home</a></body></html>');
   res.sendFile(path.join(__dirname, 'public', 'verify.html'));
 });
-app.get('/api/verify/:slug', (req, res) => {
+app.get('/api/verify/:slug', async (req, res) => {
   db = load();
   const g = Object.values(db.guilds).find(x => x.verifySlug === req.params.slug);
   if (!g) return res.status(404).json({ error: 'unknown verify link' });
-  res.json({ guildId: g.guildId, embed: g.embed, testMode: TEST_MODE });
+  // server face for the page — live name + icon when the bot can see it
+  let server = null;
+  if (DISCORD_BOT_TOKEN && !String(DISCORD_BOT_TOKEN).startsWith('test_')) {
+    try {
+      const r = await fetch(`https://discord.com/api/v10/guilds/${g.guildId}`, { headers: { Authorization: `Bot ${DISCORD_BOT_TOKEN}` } });
+      if (r.ok) {
+        const j = await r.json();
+        server = { name: j.name, icon: j.icon ? `https://cdn.discord.com/icons/${g.guildId}/${j.icon}.png` : null };
+      }
+    } catch {}
+  }
+  res.json({ guildId: g.guildId, embed: g.embed, testMode: TEST_MODE, server });
 });
 app.post('/api/verify/:slug', async (req, res) => {
   // body: { code } — discord oauth code from verify page (same client), links account for restore
